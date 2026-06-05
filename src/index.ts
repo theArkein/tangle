@@ -54,6 +54,11 @@ async function handleRooms(
 
   if (request.method === "POST" && url.pathname === "/api/rooms") {
     const slug = generateRoomSlug();
+    const id = env.GAME_ROOM.idFromName(slug);
+    const stub = env.GAME_ROOM.get(id);
+    const initUrl = new URL(request.url);
+    initUrl.pathname = "/init";
+    await stub.fetch(new Request(initUrl, { method: "POST" }));
     return Response.json({ roomId: slug }, { status: 201 });
   }
 
@@ -77,6 +82,14 @@ async function handleRooms(
       const headers = new Headers(request.headers);
       headers.set("X-Player-Id", auth.playerId);
       return stub.fetch(new Request(roomUrl, { headers, method: request.method }));
+    }
+
+    if (rest === "/join" && request.method === "GET") {
+      const auth = await authenticate(request, env);
+      if (!auth) return new Response("Unauthorized", { status: 401 });
+      const headers = new Headers(request.headers);
+      headers.set("X-Player-Id", auth.playerId);
+      return stub.fetch(new Request(roomUrl, { headers }));
     }
 
     return stub.fetch(new Request(roomUrl, request));
