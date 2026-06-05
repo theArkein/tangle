@@ -9,11 +9,31 @@ interface PlayerInfo {
   elo: number
 }
 
+interface RecentMatch {
+  id: string
+  opponent: string
+  outcome: 'win' | 'loss'
+  roundScores: [number, number]
+  date: number
+}
+
 type Phase = 'idle' | 'waiting'
+
+function relativeTime(ts: number): string {
+  const diff = Date.now() - ts
+  const mins = Math.floor(diff / 60_000)
+  const hours = Math.floor(diff / 3_600_000)
+  const days = Math.floor(diff / 86_400_000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  if (hours < 24) return `${hours}h ago`
+  return `${days}d ago`
+}
 
 export default function LobbyPage() {
   const router = useRouter()
   const [player, setPlayer] = useState<PlayerInfo | null>(null)
+  const [recentMatches, setRecentMatches] = useState<RecentMatch[] | null>(null)
   const [phase, setPhase] = useState<Phase>('idle')
   const [token, setToken] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
@@ -24,6 +44,10 @@ export default function LobbyPage() {
       .then(r => r.json())
       .then(data => setPlayer(data as PlayerInfo))
       .catch(() => {})
+    fetch('/api/me/matches')
+      .then(r => r.json())
+      .then(data => setRecentMatches(data as RecentMatch[]))
+      .catch(() => setRecentMatches([]))
   }, [])
 
   useEffect(() => {
@@ -135,9 +159,48 @@ export default function LobbyPage() {
         <h2 className="mb-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
           Recent matches
         </h2>
-        <div className="rounded-2xl border border-black/[.08] dark:border-white/[.08] p-8 text-center">
-          <p className="text-sm text-zinc-400 dark:text-zinc-600">No matches yet</p>
-        </div>
+
+        {recentMatches === null ? (
+          <div className="rounded-2xl border border-black/[.08] dark:border-white/[.08] divide-y divide-black/[.06] dark:divide-white/[.06] overflow-hidden">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="flex items-center px-4 py-3 gap-3">
+                <div className="h-4 w-4 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3 w-24 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+                  <div className="h-2.5 w-14 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+                </div>
+                <div className="h-3 w-8 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        ) : recentMatches.length === 0 ? (
+          <div className="rounded-2xl border border-black/[.08] dark:border-white/[.08] p-8 text-center">
+            <p className="text-sm text-zinc-400 dark:text-zinc-600">No matches yet</p>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-black/[.08] dark:border-white/[.08] divide-y divide-black/[.06] dark:divide-white/[.06] overflow-hidden">
+            {recentMatches.map(m => (
+              <div key={m.id} className="flex items-center px-4 py-3 gap-3">
+                <span
+                  className={`text-xs font-bold w-4 text-center ${
+                    m.outcome === 'win'
+                      ? 'text-green-600 dark:text-green-400'
+                      : 'text-red-500'
+                  }`}
+                >
+                  {m.outcome === 'win' ? 'W' : 'L'}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{m.opponent}</p>
+                  <p className="text-xs text-zinc-500">{relativeTime(m.date)}</p>
+                </div>
+                <span className="text-sm tabular-nums text-zinc-500">
+                  {m.roundScores[0]}–{m.roundScores[1]}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   )
