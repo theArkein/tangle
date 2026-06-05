@@ -1,5 +1,6 @@
 export { GameRoom } from "./durable-objects/GameRoom";
 import { handleMe } from "./routes/auth";
+import { handleMatchmake } from "./routes/matchmake";
 import { authenticate } from "./auth/middleware";
 
 export interface Env {
@@ -20,6 +21,10 @@ export default {
 
     if (url.pathname === "/api/me") {
       return handleMe(request, env);
+    }
+
+    if (url.pathname.startsWith("/api/matchmake")) {
+      return handleMatchmake(request, env);
     }
 
     if (url.pathname.startsWith("/api/rooms")) {
