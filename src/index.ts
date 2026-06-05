@@ -1,5 +1,6 @@
 export { GameRoom } from "./durable-objects/GameRoom";
 import { handleMe } from "./routes/auth";
+import { authenticate } from "./auth/middleware";
 
 export interface Env {
   GAME_ROOM: DurableObjectNamespace;
@@ -29,6 +30,16 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
+function generateRoomSlug(): string {
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "")
+    .slice(0, 16);
+}
+
 async function handleRooms(
   request: Request,
   env: Env,
@@ -37,17 +48,32 @@ async function handleRooms(
   const roomMatch = url.pathname.match(/^\/api\/rooms\/([^/]+)(\/.*)?$/);
 
   if (request.method === "POST" && url.pathname === "/api/rooms") {
-    const id = env.GAME_ROOM.newUniqueId();
-    const stub = env.GAME_ROOM.get(id);
-    return stub.fetch(request);
+    const slug = generateRoomSlug();
+    return Response.json({ roomId: slug }, { status: 201 });
   }
 
   if (roomMatch) {
     const [, roomSlug, rest] = roomMatch;
+
     const id = env.GAME_ROOM.idFromName(roomSlug ?? "");
     const stub = env.GAME_ROOM.get(id);
     const roomUrl = new URL(request.url);
     roomUrl.pathname = rest ?? "/";
+
+    // Guard WebSocket upgrades before forwarding to DO
+    if (rest === "/ws") {
+      if (request.headers.get("Upgrade") !== "websocket") {
+        return new Response("Expected WebSocket upgrade", { status: 426 });
+      }
+      const auth = await authenticate(request, env);
+      if (!auth) return new Response("Unauthorized", { status: 401 });
+
+      // Pass verified player ID to DO via trusted internal header
+      const headers = new Headers(request.headers);
+      headers.set("X-Player-Id", auth.playerId);
+      return stub.fetch(new Request(roomUrl, { headers, method: request.method }));
+    }
+
     return stub.fetch(new Request(roomUrl, request));
   }
 
