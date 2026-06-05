@@ -1,4 +1,5 @@
 export { GameRoom } from "./durable-objects/GameRoom";
+import { handleMe } from "./routes/auth";
 
 export interface Env {
   GAME_ROOM: DurableObjectNamespace;
@@ -14,6 +15,10 @@ export default {
 
     if (url.pathname === "/api/health") {
       return Response.json({ status: "ok", env: env.ENVIRONMENT });
+    }
+
+    if (url.pathname === "/api/me") {
+      return handleMe(request, env);
     }
 
     if (url.pathname.startsWith("/api/rooms")) {
