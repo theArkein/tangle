@@ -1,0 +1,27 @@
+name = "tangle"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[durable_objects.bindings]]
+name = "GAME_ROOM"
+class_name = "GameRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameRoom"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tangle-db"
+database_id = "placeholder-replace-after-d1-create"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "placeholder-replace-after-kv-create"
+
+[vars]
+ENVIRONMENT = "development"
+
+[dev]
+port = 8787
