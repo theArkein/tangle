@@ -18,6 +18,7 @@ interface RoomStorage {
   matchState: MatchState | null;
   playerIds: string[];
   scores: Record<string, number>;
+  initialized?: boolean;
 }
 
 export class GameRoom implements DurableObject {
@@ -33,15 +34,44 @@ export class GameRoom implements DurableObject {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
+    if (url.pathname === "/init" && request.method === "POST") {
+      const stored = await this.loadRoom();
+      stored.initialized = true;
+      await this.saveRoom(stored);
+      return new Response(null, { status: 204 });
+    }
+
     if (url.pathname === "/ws") {
       return this.handleWebSocket(request);
     }
 
+    if (url.pathname === "/join") {
+      return this.handleJoinCheck(request);
+    }
+
     const stored = await this.loadRoom();
+    if (!stored.initialized) {
+      return Response.json({ error: "room_not_found" }, { status: 404 });
+    }
     return Response.json({
       roomId: this.state.id.name ?? this.state.id.toString(),
       status: stored.matchState?.status ?? "waiting",
       players: stored.playerIds,
+    });
+  }
+
+  private async handleJoinCheck(request: Request): Promise<Response> {
+    const stored = await this.loadRoom();
+    if (!stored.initialized) {
+      return Response.json({ error: "room_not_found" }, { status: 404 });
+    }
+    const playerId = request.headers.get("X-Player-Id") ?? "";
+    if (!stored.playerIds.includes(playerId) && stored.playerIds.length >= 2) {
+      return Response.json({ error: "room_full" }, { status: 403 });
+    }
+    return Response.json({
+      status: stored.matchState?.status ?? "waiting",
+      playersConnected: stored.playerIds.length,
     });
   }
 
