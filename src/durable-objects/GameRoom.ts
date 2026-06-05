@@ -7,6 +7,11 @@ import {
 import { validate } from "../modules/WordValidator";
 import { D1Dictionary } from "../modules/D1Dictionary";
 import { score } from "../modules/ScoringEngine";
+import {
+  persistMatch,
+  type WordEntry,
+  type RoundHistoryEntry,
+} from "../modules/MatchPersistence";
 
 const TURN_TIMEOUT_MS = 15_000;
 const REMATCH_TIMEOUT_MS = 30_000;
@@ -14,19 +19,6 @@ const SEED_LETTERS = "abcdefghijklmnoprstw";
 
 function randomSeedLetter(): string {
   return SEED_LETTERS[Math.floor(Math.random() * SEED_LETTERS.length)] ?? "a";
-}
-
-export interface WordEntry {
-  word: string;
-  playerId: string;
-  points: number;
-  breakdown: { base: number; rareLetter: number; longWord: number };
-}
-
-export interface RoundHistoryEntry {
-  roundNumber: number;
-  winnerId: string;
-  words: WordEntry[];
 }
 
 interface RoomStorage {
@@ -376,7 +368,13 @@ export class GameRoom implements DurableObject {
           await this.state.storage.deleteAlarm();
           break;
         case "matchOver":
-          // Elo + persistence handled in issue #14
+          await persistMatch(this.env, {
+            player1Id: stored.playerIds[0] ?? "",
+            player2Id: stored.playerIds[1] ?? "",
+            winnerId: effect.winnerId,
+            roundWins: stored.matchState?.roundWins ?? {},
+            roundHistory: stored.roundHistory,
+          });
           break;
       }
     }
