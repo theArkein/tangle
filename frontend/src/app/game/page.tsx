@@ -23,12 +23,27 @@ interface MatchState {
   matchWinnerId?: string
 }
 
+interface WordEntry {
+  word: string
+  playerId: string
+  points: number
+  breakdown: { base: number; rareLetter: number; longWord: number }
+}
+
+interface RoundHistoryEntry {
+  roundNumber: number
+  winnerId: string
+  words: WordEntry[]
+}
+
 type ServerMsg =
-  | { type: 'state_update'; state: MatchState; scores: Record<string, number> }
+  | { type: 'state_update'; state: MatchState; scores: Record<string, number>; roundHistory: RoundHistoryEntry[] }
   | { type: 'waiting'; playerCount: number }
   | { type: 'word_result'; valid: true; points: number; breakdown: { base: number; rareLetter: number; longWord: number } }
   | { type: 'word_result'; valid: false; reason: string }
   | { type: 'opponent_disconnected' }
+  | { type: 'rematch_pending' }
+  | { type: 'rematch_timeout' }
   | { type: 'error'; message: string }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -54,6 +69,8 @@ function GameContent() {
   const [turnStartAt, setTurnStartAt] = useState(Date.now())
   const [timeLeft, setTimeLeft] = useState(TURN_SECONDS)
   const [roundEnd, setRoundEnd] = useState<{ roundNumber: number; winnerId: string } | null>(null)
+  const [roundHistory, setRoundHistory] = useState<RoundHistoryEntry[]>([])
+  const [rematchState, setRematchState] = useState<'idle' | 'pending'>('idle')
 
   const wsRef = useRef<WebSocket | null>(null)
   const prevStateRef = useRef<MatchState | null>(null)
@@ -95,6 +112,16 @@ function GameContent() {
         return
       }
 
+      if (msg.type === 'rematch_pending') {
+        setRematchState('pending')
+        return
+      }
+
+      if (msg.type === 'rematch_timeout') {
+        router.push('/')
+        return
+      }
+
       if (msg.type === 'word_result') {
         setSubmitting(false)
         if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
@@ -113,6 +140,11 @@ function GameContent() {
         const prev = prevStateRef.current
         const prevRound = prev?.currentRound
         const newRound = state.currentRound
+
+        // Reset rematch button state when a new match starts
+        if (state.status === 'match_complete') {
+          setRematchState('idle')
+        }
 
         // Detect round transition: show brief overlay with who won the just-finished round
         if (
@@ -143,6 +175,7 @@ function GameContent() {
         }
 
         prevStateRef.current = state
+        setRoundHistory(msg.roundHistory ?? [])
         setWaitingCount(null)
         setMatchState(state)
         setSubmitting(false)
@@ -153,7 +186,7 @@ function GameContent() {
     ws.onerror = () => setDisconnected(true)
 
     return () => ws.close()
-  }, [myId, roomId])
+  }, [myId, roomId, router])
 
   // Visual countdown ticker — updates every 250 ms
   useEffect(() => {
@@ -171,6 +204,12 @@ function GameContent() {
     setSubmitting(true)
     setFeedback(null)
   }, [wordInput, submitting])
+
+  const sendRematchRequest = useCallback(() => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    wsRef.current.send(JSON.stringify({ type: 'rematch_request' }))
+    setRematchState('pending')
+  }, [])
 
   // ── Disconnected ─────────────────────────────────────────────────────────
 
@@ -214,26 +253,97 @@ function GameContent() {
     )
   }
 
-  // ── Match complete ───────────────────────────────────────────────────────
+  // ── Match complete — result screen ───────────────────────────────────────
 
   if (matchState.status === 'match_complete') {
     const won = matchState.matchWinnerId === myId
     const opponentId = matchState.player1Id === myId ? matchState.player2Id : matchState.player1Id
+
     return (
-      <div className="flex flex-col min-h-full items-center justify-center gap-6 px-4 text-center">
-        <p className="text-5xl">{won ? '🏆' : '😔'}</p>
-        <div>
+      <div className="flex flex-col min-h-full bg-background text-foreground">
+        {/* Result header */}
+        <header className="flex-none px-4 pt-8 pb-5 text-center border-b border-black/[.08] dark:border-white/[.08]">
+          <p className="text-5xl mb-3">{won ? '🏆' : '😔'}</p>
           <p className="text-2xl font-bold">{won ? 'You win!' : 'You lose'}</p>
           <p className="mt-1 text-sm text-zinc-500">
             {matchState.roundWins[myId] ?? 0} – {matchState.roundWins[opponentId] ?? 0} rounds
           </p>
+        </header>
+
+        {/* Round replay */}
+        <div className="flex-1 overflow-y-auto px-4 py-5 space-y-5">
+          {roundHistory.length === 0 ? (
+            <p className="text-sm text-zinc-400 text-center py-4">No round data available</p>
+          ) : (
+            roundHistory.map(rh => (
+              <div key={rh.roundNumber}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                    Round {rh.roundNumber}
+                  </span>
+                  <span className="text-xs text-zinc-400">
+                    · {rh.winnerId === myId ? 'You won' : 'Opponent won'}
+                  </span>
+                </div>
+                {rh.words.length === 0 ? (
+                  <p className="text-sm text-zinc-400 italic pl-1">No words played</p>
+                ) : (
+                  <ol className="flex flex-col gap-1">
+                    {rh.words.map((entry, i) => (
+                      <li
+                        key={i}
+                        className="flex items-center gap-2 text-sm rounded-lg px-2 py-1.5"
+                      >
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full flex-none ${
+                            entry.playerId === myId ? 'bg-blue-500' : 'bg-zinc-400'
+                          }`}
+                        />
+                        <span className="font-medium flex-1 min-w-0 truncate">{entry.word}</span>
+                        {entry.breakdown.rareLetter > 0 && (
+                          <span className="text-xs px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium">
+                            rare
+                          </span>
+                        )}
+                        {entry.breakdown.longWord > 0 && (
+                          <span className="text-xs px-1.5 py-0.5 rounded-md bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 font-medium">
+                            long
+                          </span>
+                        )}
+                        <span className="text-xs tabular-nums text-zinc-500 ml-auto">
+                          +{entry.points}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            ))
+          )}
         </div>
-        <button
-          onClick={() => router.push('/')}
-          className="h-12 w-full max-w-xs rounded-2xl bg-foreground text-background font-semibold transition-opacity hover:opacity-80"
-        >
-          Back to lobby
-        </button>
+
+        {/* Actions */}
+        <div className="flex-none border-t border-black/[.08] dark:border-white/[.08] px-4 pt-4 pb-8 space-y-3">
+          {rematchState === 'idle' ? (
+            <button
+              onClick={sendRematchRequest}
+              className="h-12 w-full rounded-2xl bg-foreground text-background text-sm font-semibold transition-opacity hover:opacity-80 active:opacity-60"
+            >
+              Rematch
+            </button>
+          ) : (
+            <div className="h-12 w-full rounded-2xl border border-black/[.08] dark:border-white/[.08] flex items-center justify-center gap-2">
+              <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-foreground border-t-transparent" />
+              <span className="text-sm text-zinc-500">Waiting for opponent…</span>
+            </div>
+          )}
+          <button
+            onClick={() => router.push('/')}
+            className="h-10 w-full rounded-2xl border border-black/[.08] dark:border-white/[.08] text-sm font-medium transition-colors hover:bg-black/[.04] dark:hover:bg-white/[.04]"
+          >
+            Back to lobby
+          </button>
+        </div>
       </div>
     )
   }
