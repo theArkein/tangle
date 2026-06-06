@@ -2,6 +2,7 @@ export { GameRoom } from "./durable-objects/GameRoom";
 import { handleMe } from "./routes/auth";
 import { handleMatchmake } from "./routes/matchmake";
 import { handleMatches } from "./routes/matches";
+import { handleGoogleAuth, handleGoogleCallback } from "./routes/oauth";
 import { authenticate } from "./auth/middleware";
 
 export interface Env {
@@ -10,6 +11,8 @@ export interface Env {
   KV: KVNamespace;
   JWT_SECRET: string;
   ENVIRONMENT: string;
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
 }
 
 export default {
@@ -26,6 +29,14 @@ export default {
 
     if (url.pathname === "/api/me/matches") {
       return handleMatches(request, env);
+    }
+
+    if (url.pathname === "/api/auth/google") {
+      return handleGoogleAuth(request, env);
+    }
+
+    if (url.pathname === "/api/auth/google/callback") {
+      return handleGoogleCallback(request, env);
     }
 
     if (url.pathname.startsWith("/api/matchmake")) {
