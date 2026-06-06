@@ -71,6 +71,7 @@ function GameContent() {
   const [roundEnd, setRoundEnd] = useState<{ roundNumber: number; winnerId: string } | null>(null)
   const [roundHistory, setRoundHistory] = useState<RoundHistoryEntry[]>([])
   const [rematchState, setRematchState] = useState<'idle' | 'pending'>('idle')
+  const [showLinkPrompt, setShowLinkPrompt] = useState(false)
 
   const wsRef = useRef<WebSocket | null>(null)
   const prevStateRef = useRef<MatchState | null>(null)
@@ -205,6 +206,19 @@ function GameContent() {
     setFeedback(null)
   }, [wordInput, submitting])
 
+  // Show Google link prompt once after first match win (mobile only)
+  useEffect(() => {
+    if (
+      matchState?.status === 'match_complete' &&
+      matchState.matchWinnerId === myId &&
+      !localStorage.getItem('link_prompt_dismissed') &&
+      typeof window !== 'undefined' &&
+      /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+    ) {
+      setShowLinkPrompt(true)
+    }
+  }, [matchState?.status, matchState?.matchWinnerId, myId])
+
   const sendRematchRequest = useCallback(() => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
     wsRef.current.send(JSON.stringify({ type: 'rematch_request' }))
@@ -321,6 +335,32 @@ function GameContent() {
             ))
           )}
         </div>
+
+        {/* Google link prompt — shown once on mobile after first win */}
+        {showLinkPrompt && (
+          <div className="flex-none mx-4 mb-2 rounded-2xl border border-black/[.08] dark:border-white/[.08] bg-background px-4 py-3 flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">Save your progress</p>
+              <p className="text-xs text-zinc-500">Link Google to recover your account on any device</p>
+            </div>
+            <a
+              href="/api/auth/google"
+              className="flex-none text-xs font-semibold text-blue-600 dark:text-blue-400 whitespace-nowrap"
+            >
+              Link
+            </a>
+            <button
+              onClick={() => {
+                localStorage.setItem('link_prompt_dismissed', '1')
+                setShowLinkPrompt(false)
+              }}
+              className="flex-none text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex-none border-t border-black/[.08] dark:border-white/[.08] px-4 pt-4 pb-8 space-y-3">
