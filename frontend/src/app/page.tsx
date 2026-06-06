@@ -7,6 +7,7 @@ interface PlayerInfo {
   id: string
   display_name: string
   elo: number
+  google_linked: boolean
 }
 
 interface RecentMatch {
@@ -105,6 +106,14 @@ export default function LobbyPage() {
           <div className="flex items-center gap-3 text-sm">
             <span className="font-medium">{player.display_name}</span>
             <span className="text-zinc-500">{player.elo} ELO</span>
+            {!player.google_linked && (
+              <a
+                href="/api/auth/google"
+                className="text-xs font-semibold text-blue-600 dark:text-blue-400 whitespace-nowrap"
+              >
+                Link Google
+              </a>
+            )}
           </div>
         ) : (
           <div className="h-4 w-28 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />

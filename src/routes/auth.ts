@@ -27,10 +27,10 @@ export async function handleMe(request: Request, env: Env): Promise<Response> {
   }
 
   const player = await env.DB.prepare(
-    "SELECT id, display_name, elo FROM players WHERE id = ?"
+    "SELECT id, display_name, elo, linked_oauth_provider FROM players WHERE id = ?"
   )
     .bind(session.playerId)
-    .first<{ id: string; display_name: string; elo: number }>();
+    .first<{ id: string; display_name: string; elo: number; linked_oauth_provider: string | null }>();
 
   if (!player) {
     return new Response("Player not found", { status: 404 });
@@ -40,5 +40,6 @@ export async function handleMe(request: Request, env: Env): Promise<Response> {
     id: player.id,
     display_name: player.display_name,
     elo: player.elo,
+    google_linked: !!player.linked_oauth_provider,
   });
 }

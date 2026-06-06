@@ -218,9 +218,7 @@ function GameContent() {
     if (
       matchState?.status === 'match_complete' &&
       matchState.matchWinnerId === myId &&
-      !localStorage.getItem('link_prompt_dismissed') &&
-      typeof window !== 'undefined' &&
-      /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+      !localStorage.getItem('link_prompt_dismissed')
     ) {
       setShowLinkPrompt(true)
     }
