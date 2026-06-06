@@ -34,6 +34,7 @@ export default function WordPill({
     fontWeight: 500,
     fontFamily: 'var(--font-body)',
     display: 'inline-block',
+    whiteSpace: 'nowrap' as const,
   }
 
   return (

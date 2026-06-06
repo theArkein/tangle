@@ -18,13 +18,13 @@ export default function Card({
   const [hovered, setHovered] = useState(false)
 
   const baseStyle: React.CSSProperties = {
-    border: `1px solid ${hovered && onClick ? 'var(--n300)' : 'var(--n200)'}`,
     borderRadius: 'var(--radius-xl)',
     background: 'var(--n0)',
     overflow: 'hidden',
+    cursor: onClick ? 'pointer' : 'default',
     transition: 'border-color 0.15s',
-    cursor: onClick ? 'pointer' : undefined,
     ...style,
+    border: `1px solid ${hovered && onClick ? 'var(--n300)' : 'var(--n200)'}`,
   }
 
   return (

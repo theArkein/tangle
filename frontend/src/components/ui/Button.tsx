@@ -1,4 +1,6 @@
-import React from 'react'
+'use client'
+
+import React, { useState } from 'react'
 
 type ButtonVariant = 'primary' | 'secondary' | 'accent' | 'ghost' | 'danger'
 type ButtonSize = 'sm' | 'md' | 'lg' | 'xl'
@@ -43,6 +45,14 @@ const variantStyles: Record<ButtonVariant, React.CSSProperties> = {
   },
 }
 
+const hoverStyles: Record<ButtonVariant, React.CSSProperties> = {
+  primary: { opacity: 0.85 },
+  secondary: { background: 'var(--n50)' },
+  accent: { opacity: 0.9 },
+  ghost: { background: 'var(--n50)' },
+  danger: { opacity: 0.85 },
+}
+
 const sizeStyles: Record<ButtonSize, React.CSSProperties> = {
   sm: { padding: '7px 14px', fontSize: '12px' },
   md: { padding: '11px 22px', fontSize: '13px' },
@@ -61,15 +71,18 @@ export default function Button({
   disabled = false,
   type = 'button',
 }: ButtonProps) {
+  const [hovered, setHovered] = useState(false)
+
   const style: React.CSSProperties = {
     ...variantStyles[variant],
+    ...(hovered && !disabled ? hoverStyles[variant] : {}),
     ...sizeStyles[size],
     borderRadius: 'var(--radius-md)',
     fontFamily: 'var(--font-heading)',
     fontWeight: 500,
     cursor: disabled ? 'not-allowed' : 'pointer',
-    opacity: disabled ? 0.4 : 1,
-    display: 'inline-flex',
+    opacity: disabled ? 0.4 : undefined,
+    display: full ? 'flex' : 'inline-flex',
     alignItems: 'center',
     gap: '7px',
     width: full ? '100%' : undefined,
@@ -85,6 +98,8 @@ export default function Button({
       disabled={disabled}
       className={className}
       style={style}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
       {icon}
       {children}

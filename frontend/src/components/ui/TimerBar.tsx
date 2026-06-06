@@ -6,27 +6,27 @@ interface TimerBarProps {
   label?: string
 }
 
+const containerStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  width: '100%',
+}
+
+const trackStyle: React.CSSProperties = {
+  flex: 1,
+  height: '5px',
+  background: 'var(--n200)',
+  borderRadius: 'var(--radius-full)',
+  overflow: 'hidden',
+}
+
 export default function TimerBar({
   percent,
   danger = false,
   label,
 }: TimerBarProps) {
-  const clampedPercent = Math.min(100, Math.max(0, percent))
-
-  const containerStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    width: '100%',
-  }
-
-  const trackStyle: React.CSSProperties = {
-    flex: 1,
-    height: '5px',
-    background: 'var(--n200)',
-    borderRadius: 'var(--radius-full)',
-    overflow: 'hidden',
-  }
+  const clampedPercent = Math.min(100, Math.max(0, Number.isFinite(percent) ? percent : 0))
 
   const fillStyle: React.CSSProperties = {
     width: `${clampedPercent}%`,
