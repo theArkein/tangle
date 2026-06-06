@@ -44,6 +44,11 @@ export interface TransitionResult {
 
 const FAULTS_TO_LOSE_ROUND = 3;
 const ROUNDS_TO_WIN_MATCH = 3;
+const SEED_LETTERS = "abcdefghijklmnoprstw";
+
+function randomSeedLetter(): string {
+  return SEED_LETTERS[Math.floor(Math.random() * SEED_LETTERS.length)] ?? "a";
+}
 
 function otherPlayer(state: MatchState, playerId: PlayerId): PlayerId {
   return playerId === state.player1Id ? state.player2Id : state.player1Id;
@@ -97,7 +102,7 @@ function endRound(
 
   const nextRound: RoundState = {
     roundNumber: nextRoundNumber,
-    seedLetter: "?",
+    seedLetter: randomSeedLetter(),
     chain: [],
     currentPlayerId: winnerId,
     faults: {

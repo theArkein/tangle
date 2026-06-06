@@ -91,7 +91,7 @@ export default function LobbyPage() {
   async function handleChallengeFriend() {
     const res = await fetch('/api/rooms', { method: 'POST' })
     const { roomId } = (await res.json()) as { roomId: string }
-    const url = `${window.location.origin}/join/${roomId}`
+    const url = `${window.location.origin}/game?room=${roomId}`
     await navigator.clipboard.writeText(url)
     setLinkCopied(true)
     setTimeout(() => setLinkCopied(false), 3000)
