@@ -5,7 +5,7 @@ export default defineWorkersConfig({
   test: {
     poolOptions: {
       workers: {
-        wrangler: { configPath: "./wrangler.toml" },
+        wrangler: { configPath: "./wrangler.test.toml" },
         miniflare: {
           bindings: { JWT_SECRET: "test-jwt-secret-32-bytes-padding!!" },
         },
