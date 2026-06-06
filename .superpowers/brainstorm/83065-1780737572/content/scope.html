@@ -1,0 +1,41 @@
+<h2>How far do you want to take this UI upgrade?</h2>
+<p class="subtitle">The design docs have everything from new fonts/colors to a full responsive layout system. How much do you want?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Design tokens only</h3>
+      <p>Apply the new fonts (DM Serif Display, Sora, IBM Plex Sans, IBM Plex Mono), warm neutral color palette, and component styles to the <em>existing</em> lobby and game screens. Same layout structure, better visual identity.</p>
+      <ul style="margin-top:10px;font-size:13px;color:#666;padding-left:16px">
+        <li>~1–2 days of work</li>
+        <li>Low risk — no structural changes</li>
+        <li>Existing functionality unchanged</li>
+      </ul>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Full responsive redesign</h3>
+      <p>Rebuild lobby and game screens using the responsive prototype as the spec: sidebar nav on desktop/tablet, bottom nav on mobile, new component library (WordPill, Avatar, TimerBar, Badge).</p>
+      <ul style="margin-top:10px;font-size:13px;color:#666;padding-left:16px">
+        <li>~3–5 days of work</li>
+        <li>Big visual lift — matches the prototype</li>
+        <li>All existing screens get redesigned</li>
+      </ul>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Full redesign + new screens</h3>
+      <p>Everything in B, plus add the Profile and League screens from the prototype. Gives the app full depth and navigation.</p>
+      <ul style="margin-top:10px;font-size:13px;color:#666;padding-left:16px">
+        <li>~1 week of work</li>
+        <li>Adds screens that need backend APIs</li>
+        <li>Most ambitious — plan backend + frontend together</li>
+      </ul>
+    </div>
+  </div>
+</div>
