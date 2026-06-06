@@ -14,27 +14,25 @@ interface AppLayoutProps {
   children: ReactNode
 }
 
-function getWidth(): number {
-  return typeof window !== 'undefined' ? window.innerWidth : 1200
-}
-
 export default function AppLayout({ children }: AppLayoutProps) {
   const pathname = usePathname()
-  const [windowWidth, setWindowWidth] = useState<number>(getWidth)
+  const [windowWidth, setWindowWidth] = useState<number | undefined>(undefined)
   const [player, setPlayer] = useState<PlayerInfo | null>(null)
 
   useEffect(() => {
-    function handleResize() {
-      setWindowWidth(window.innerWidth)
-    }
+    setWindowWidth(window.innerWidth)
+    const handleResize = () => setWindowWidth(window.innerWidth)
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
   useEffect(() => {
     fetch('/api/me')
-      .then(r => r.json())
-      .then((data: PlayerInfo) => setPlayer(data))
+      .then(r => {
+        if (!r.ok) return null
+        return r.json() as Promise<PlayerInfo>
+      })
+      .then(data => { if (data) setPlayer(data) })
       .catch(() => {})
   }, [])
 
@@ -42,6 +40,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
   if (pathname.startsWith('/game')) {
     return <>{children}</>
   }
+
+  if (windowWidth === undefined) return <>{children}</>
 
   const isMobile = windowWidth < 640
   const isTablet = windowWidth >= 640 && windowWidth < 900

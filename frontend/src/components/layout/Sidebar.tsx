@@ -3,20 +3,7 @@
 import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-
-interface NavItem {
-  id: string
-  icon: string
-  label: string
-  href: string
-  disabled?: boolean
-}
-
-const NAV_ITEMS: NavItem[] = [
-  { id: 'home', icon: '🏠', label: 'Home', href: '/' },
-  { id: 'profile', icon: '👤', label: 'Profile', href: '/profile' },
-  { id: 'league', icon: '🏅', label: 'League', href: '/league', disabled: true },
-]
+import { NAV_ITEMS, NavItem } from './navItems'
 
 interface SidebarProps {
   collapsed: boolean
@@ -28,6 +15,7 @@ export default function Sidebar({ collapsed, eloText }: SidebarProps) {
 
   return (
     <nav
+      aria-label="Main navigation"
       style={{
         width: collapsed ? 64 : 220,
         height: '100vh',
@@ -111,6 +99,7 @@ export default function Sidebar({ collapsed, eloText }: SidebarProps) {
                 key={item.id}
                 type="button"
                 disabled
+                title={collapsed ? item.label : undefined}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -199,6 +188,7 @@ function NavLink({ item, isActive, collapsed }: NavLinkProps) {
   return (
     <Link
       href={item.href}
+      title={collapsed ? item.label : undefined}
       style={{
         display: 'flex',
         alignItems: 'center',

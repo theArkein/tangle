@@ -2,26 +2,14 @@
 
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-
-interface NavItem {
-  id: string
-  icon: string
-  label: string
-  href: string
-  disabled?: boolean
-}
-
-const NAV_ITEMS: NavItem[] = [
-  { id: 'home', icon: '🏠', label: 'Home', href: '/' },
-  { id: 'profile', icon: '👤', label: 'Profile', href: '/profile' },
-  { id: 'league', icon: '🏅', label: 'League', href: '/league', disabled: true },
-]
+import { NAV_ITEMS } from './navItems'
 
 export default function BottomNav() {
   const pathname = usePathname()
 
   return (
     <nav
+      aria-label="Main navigation"
       style={{
         position: 'fixed',
         bottom: 0,
