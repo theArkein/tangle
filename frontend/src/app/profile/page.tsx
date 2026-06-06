@@ -7,17 +7,16 @@ import Card from '@/components/ui/Card'
 
 interface PlayerData {
   id: string
-  displayName: string
+  display_name: string
   elo: number
 }
 
 interface MatchRecord {
   id: string
-  opponentName: string
-  winnerId: string
-  myId: string
-  createdAt: string
-  roundScores?: Record<string, number>
+  opponent: string
+  outcome: 'win' | 'loss'
+  roundScores: [number, number]
+  date: number
 }
 
 export default function ProfilePage() {
@@ -53,7 +52,7 @@ export default function ProfilePage() {
     )
   }
 
-  const wins = matches.filter(m => m.winnerId === m.myId).length
+  const wins = matches.filter(m => m.outcome === 'win').length
   const winRate = matches.length > 0 ? Math.round((wins / matches.length) * 100) : 0
 
   return (
@@ -61,10 +60,10 @@ export default function ProfilePage() {
       {/* Profile card */}
       <Card style={{ padding: '24px 20px', marginBottom: '16px', textAlign: 'center' }}>
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
-          <Avatar name={player.displayName} variant="p1" size={52} />
+          <Avatar name={player.display_name} variant="p1" size={52} />
         </div>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: '22px', color: 'var(--n900)', marginBottom: '8px' }}>
-          {player.displayName}
+          {player.display_name}
         </div>
         <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
           <Badge variant="neutral">
@@ -99,34 +98,32 @@ export default function ProfilePage() {
         </Card>
       ) : (
         <Card style={{ overflow: 'hidden' }}>
-          {matches.slice(0, 10).map((match, i) => {
-            const won = match.winnerId === match.myId
-            return (
-              <div
-                key={match.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '10px 16px',
-                  borderBottom: i < Math.min(matches.length, 10) - 1 ? '1px solid var(--n100)' : 'none',
-                }}
-              >
-                <Avatar name={match.opponentName ?? '?'} variant="p2" size={30} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-heading)', color: 'var(--n800)' }}>
-                    vs {match.opponentName ?? 'Opponent'}
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--n400)', fontFamily: 'var(--font-mono)', marginTop: '1px' }}>
-                    {match.createdAt ? new Date(match.createdAt).toLocaleDateString() : ''}
-                  </div>
+          {matches.map((match, i) => (
+            <div
+              key={match.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '10px 16px',
+                borderBottom: i < matches.length - 1 ? '1px solid var(--n100)' : 'none',
+              }}
+            >
+              <Avatar name={match.opponent || '?'} variant="p2" size={30} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '13px', fontWeight: 500, fontFamily: 'var(--font-heading)', color: 'var(--n800)' }}>
+                  vs {match.opponent}
                 </div>
-                <Badge variant={won ? 'success' : 'danger'}>
-                  {won ? 'Victory' : 'Defeat'}
-                </Badge>
+                <div style={{ fontSize: '11px', color: 'var(--n400)', fontFamily: 'var(--font-mono)', marginTop: '1px' }}>
+                  {match.roundScores[0]} – {match.roundScores[1]} pts
+                  {match.date ? ` · ${new Date(match.date).toLocaleDateString()}` : ''}
+                </div>
               </div>
-            )
-          })}
+              <Badge variant={match.outcome === 'win' ? 'success' : 'danger'}>
+                {match.outcome === 'win' ? 'Victory' : 'Defeat'}
+              </Badge>
+            </div>
+          ))}
         </Card>
       )}
 
