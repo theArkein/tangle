@@ -42,6 +42,9 @@
   --danger-zone-bg: rgba(192, 112, 112, 0.06);
   --rare: #9B8DB5;
   --rare-bg: rgba(155, 141, 181, 0.1);
+  --mystery: #B5A87D;
+  --mystery-bg: rgba(181, 168, 125, 0.1);
+  --freeze: #7D9AB5;
 
   /* Typography */
   --font-display: 'DM Serif Display', Georgia, serif;
