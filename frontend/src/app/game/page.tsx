@@ -53,7 +53,7 @@ type ServerMsg =
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const TURN_SECONDS = 15
+const TURN_SECONDS = 60
 const MAX_FAULTS = 3
 const ROUND_END_MS = 2500
 
