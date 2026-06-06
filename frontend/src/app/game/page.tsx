@@ -1,12 +1,17 @@
 'use client'
 
 import { Suspense, useState, useEffect, useRef, useCallback } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
+import Button from '@/components/ui/Button'
+import Avatar from '@/components/ui/Avatar'
+import Badge from '@/components/ui/Badge'
+import WordPill from '@/components/ui/WordPill'
+import TimerBar from '@/components/ui/TimerBar'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
 }
-import { useSearchParams, useRouter } from 'next/navigation'
 
 // ── Backend types (mirrored from src/modules/MatchStateMachine.ts) ───────────
 
@@ -57,6 +62,18 @@ const TURN_SECONDS = 60
 const MAX_FAULTS = 3
 const ROUND_END_MS = 2500
 
+// ── Styles ───────────────────────────────────────────────────────────────────
+
+const S = {
+  page: { display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--n50)', color: 'var(--n800)' } as React.CSSProperties,
+  centeredFull: { display: 'flex', flexDirection: 'column', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '20px', textAlign: 'center' } as React.CSSProperties,
+  header: { background: 'var(--n0)', borderBottom: '1px solid var(--n200)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px' } as React.CSSProperties,
+  scoreText: { fontSize: '18px', fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--n800)' } as React.CSSProperties,
+  sectionLabel: { fontSize: '11px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--n400)' } as React.CSSProperties,
+  bottomPanel: { background: 'var(--n0)', borderTop: '1px solid var(--n200)', padding: '12px 16px 20px' } as React.CSSProperties,
+  input: { flex: 1, border: '1px solid var(--n200)', borderRadius: 'var(--radius-md)', padding: '12px 14px', fontSize: '15px', fontFamily: 'var(--font-body)', color: 'var(--n900)', outline: 'none', minWidth: 0, background: 'var(--n0)' } as React.CSSProperties,
+} as const
+
 // ── Game screen ──────────────────────────────────────────────────────────────
 
 function GameContent() {
@@ -71,7 +88,6 @@ function GameContent() {
   const [wordInput, setWordInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [feedback, setFeedback] = useState<{ text: string; ok: boolean } | null>(null)
-  const [turnStartAt, setTurnStartAt] = useState(Date.now())
   const [timeLeft, setTimeLeft] = useState(TURN_SECONDS)
   const [roundEnd, setRoundEnd] = useState<{ roundNumber: number; winnerId: string } | null>(null)
   const [roundHistory, setRoundHistory] = useState<RoundHistoryEntry[]>([])
@@ -83,6 +99,7 @@ function GameContent() {
   const deferredInstallRef = useRef<BeforeInstallPromptEvent | null>(null)
   const prevStateRef = useRef<MatchState | null>(null)
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const turnStartAtRef = useRef(0)
 
   // Load current player ID
   useEffect(() => {
@@ -149,12 +166,10 @@ function GameContent() {
         const prevRound = prev?.currentRound
         const newRound = state.currentRound
 
-        // Reset rematch button state when a new match starts
         if (state.status === 'match_complete') {
           setRematchState('idle')
         }
 
-        // Detect round transition: show brief overlay with who won the just-finished round
         if (
           state.status !== 'match_complete' &&
           prevRound &&
@@ -172,13 +187,12 @@ function GameContent() {
           setTimeout(() => setRoundEnd(null), ROUND_END_MS)
         }
 
-        // Reset visual timer when a new turn starts (chain grows or new round)
         if (newRound) {
           const chainGrew = newRound.chain.length > (prevRound?.chain.length ?? -1)
           const roundChanged = newRound.roundNumber !== prevRound?.roundNumber
           const firstUpdate = !prevRound
           if (chainGrew || roundChanged || firstUpdate) {
-            setTurnStartAt(Date.now())
+            turnStartAtRef.current = Date.now()
           }
         }
 
@@ -200,10 +214,10 @@ function GameContent() {
   useEffect(() => {
     if (matchState?.status !== 'round_active') return
     const id = setInterval(() => {
-      setTimeLeft(Math.max(0, TURN_SECONDS - (Date.now() - turnStartAt) / 1000))
+      setTimeLeft(Math.max(0, TURN_SECONDS - (Date.now() - turnStartAtRef.current) / 1000))
     }, 250)
     return () => clearInterval(id)
-  }, [matchState?.status, turnStartAt])
+  }, [matchState?.status])
 
   const submitWord = useCallback(() => {
     const word = wordInput.trim().toLowerCase()
@@ -213,14 +227,15 @@ function GameContent() {
     setFeedback(null)
   }, [wordInput, submitting])
 
-  // Show Google link prompt once after first match win (mobile only)
+  // Show Google link prompt once after first match win
   useEffect(() => {
     if (
       matchState?.status === 'match_complete' &&
       matchState.matchWinnerId === myId &&
       !localStorage.getItem('link_prompt_dismissed')
     ) {
-      setShowLinkPrompt(true)
+      const t = setTimeout(() => setShowLinkPrompt(true), 0)
+      return () => clearTimeout(t)
     }
   }, [matchState?.status, matchState?.matchWinnerId, myId])
 
@@ -241,7 +256,8 @@ function GameContent() {
       deferredInstallRef.current &&
       !localStorage.getItem('install_prompt_dismissed')
     ) {
-      setShowInstallPrompt(true)
+      const t = setTimeout(() => setShowInstallPrompt(true), 0)
+      return () => clearTimeout(t)
     }
   }, [matchState?.status, matchState?.matchWinnerId, myId])
 
@@ -255,15 +271,13 @@ function GameContent() {
 
   if (disconnected) {
     return (
-      <div className="flex flex-col min-h-full items-center justify-center gap-4 px-4 text-center">
-        <p className="text-xl font-semibold">Opponent disconnected</p>
-        <p className="text-sm text-zinc-500">The game has ended</p>
-        <button
-          onClick={() => router.push('/')}
-          className="mt-2 h-10 px-6 rounded-full border border-black/[.08] dark:border-white/[.08] text-sm font-medium transition-colors hover:bg-black/[.04] dark:hover:bg-white/[.04]"
-        >
-          Back to lobby
-        </button>
+      <div style={S.centeredFull}>
+        <div style={{ fontSize: '32px' }}>📡</div>
+        <p style={{ fontSize: '18px', fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n900)' }}>
+          Opponent disconnected
+        </p>
+        <p style={{ fontSize: '13px', color: 'var(--n400)' }}>The game has ended</p>
+        <Button variant="secondary" onClick={() => router.push('/')}>Back to lobby</Button>
       </div>
     )
   }
@@ -272,13 +286,18 @@ function GameContent() {
 
   if (!matchState && waitingCount !== null) {
     return (
-      <div className="flex flex-col min-h-full items-center justify-center gap-4 px-4 text-center">
-        <div className="relative flex h-16 w-16 items-center justify-center">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-foreground opacity-20" />
-          <span className="relative inline-flex h-10 w-10 rounded-full bg-foreground opacity-80" />
+      <div style={S.centeredFull}>
+        <div style={{ position: 'relative', width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'var(--n400)', opacity: 0.2, animation: 'ping 1.2s cubic-bezier(0,0,0.2,1) infinite' }} />
+          <span style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--n400)', opacity: 0.8, display: 'block' }} />
         </div>
-        <p className="text-lg font-semibold">Waiting for opponent…</p>
-        <p className="text-sm text-zinc-500">{waitingCount}/2 players connected</p>
+        <p style={{ fontSize: '17px', fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n900)' }}>
+          Waiting for opponent…
+        </p>
+        <p style={{ fontSize: '13px', color: 'var(--n400)', fontFamily: 'var(--font-mono)' }}>
+          {waitingCount}/2 players connected
+        </p>
+        <style>{`@keyframes ping { 75%,100% { transform: scale(2); opacity: 0; } }`}</style>
       </div>
     )
   }
@@ -287,8 +306,9 @@ function GameContent() {
 
   if (!matchState || !myId) {
     return (
-      <div className="flex min-h-full items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-foreground border-t-transparent" />
+      <div style={{ ...S.centeredFull }}>
+        <div style={{ width: 28, height: 28, border: '3px solid var(--n200)', borderTopColor: 'var(--n900)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     )
   }
@@ -300,117 +320,110 @@ function GameContent() {
     const opponentId = matchState.player1Id === myId ? matchState.player2Id : matchState.player1Id
 
     return (
-      <div className="flex flex-col min-h-full bg-background text-foreground">
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--n0)' }}>
         {/* Result header */}
-        <header className="flex-none px-4 pt-8 pb-5 text-center border-b border-black/[.08] dark:border-white/[.08]">
-          <p className="text-5xl mb-3">{won ? '🏆' : '😔'}</p>
-          <p className="text-2xl font-bold">{won ? 'You win!' : 'You lose'}</p>
-          <p className="mt-1 text-sm text-zinc-500">
-            {matchState.roundWins[myId] ?? 0} – {matchState.roundWins[opponentId] ?? 0} rounds
-          </p>
-        </header>
+        <div style={{ flexShrink: 0, padding: '36px 20px 24px', textAlign: 'center', borderBottom: '1px solid var(--n100)' }}>
+          <div style={{ fontSize: '44px', marginBottom: '10px' }}>{won ? '🏆' : '😔'}</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: '28px', color: 'var(--n900)', marginBottom: '6px' }}>
+            {won ? 'Victory!' : 'Defeat'}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginTop: '14px' }}>
+            <div style={{ textAlign: 'center' }}>
+              <Avatar name="You" variant="p1" size={38} />
+              <div style={{ fontSize: '24px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--n900)', marginTop: '6px' }}>
+                {matchState.roundWins[myId] ?? 0}
+              </div>
+            </div>
+            <span style={{ fontSize: '13px', color: 'var(--n300)', fontWeight: 500 }}>VS</span>
+            <div style={{ textAlign: 'center' }}>
+              <Avatar name="?" variant="p2" size={38} />
+              <div style={{ fontSize: '24px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--n400)', marginTop: '6px' }}>
+                {matchState.roundWins[opponentId] ?? 0}
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Round replay */}
-        <div className="flex-1 overflow-y-auto px-4 py-5 space-y-5">
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px' }}>
+          <div style={{ ...S.sectionLabel, marginBottom: '12px' }}>Round recap</div>
           {roundHistory.length === 0 ? (
-            <p className="text-sm text-zinc-400 text-center py-4">No round data available</p>
+            <p style={{ fontSize: '13px', color: 'var(--n400)', textAlign: 'center', padding: '20px 0' }}>
+              No round data available
+            </p>
           ) : (
-            roundHistory.map(rh => (
-              <div key={rh.roundNumber}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                    Round {rh.roundNumber}
-                  </span>
-                  <span className="text-xs text-zinc-400">
-                    · {rh.winnerId === myId ? 'You won' : 'Opponent won'}
-                  </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {roundHistory.map(rh => (
+                <div key={rh.roundNumber} style={{ border: '1px solid var(--n200)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'var(--n0)' }}>
+                  <div style={{ padding: '10px 14px', background: 'var(--n50)', borderBottom: '1px solid var(--n100)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ ...S.sectionLabel }}>Round {rh.roundNumber}</span>
+                    <Badge variant={rh.winnerId === myId ? 'success' : 'danger'} size="xs">
+                      {rh.winnerId === myId ? 'You won' : 'Opponent won'}
+                    </Badge>
+                  </div>
+                  {rh.words.length === 0 ? (
+                    <p style={{ fontSize: '13px', color: 'var(--n400)', fontStyle: 'italic', padding: '12px 14px' }}>No words played</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '12px 14px' }}>
+                      {rh.words.map((entry, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <WordPill
+                            word={entry.word}
+                            variant={entry.playerId === myId ? 'player1' : 'player2'}
+                            size="sm"
+                          />
+                          {entry.breakdown.rareLetter > 0 && (
+                            <Badge variant="rare" size="xs">rare</Badge>
+                          )}
+                          {entry.breakdown.longWord > 0 && (
+                            <Badge variant="info" size="xs">long</Badge>
+                          )}
+                          <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--n400)' }}>
+                            +{entry.points}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                {rh.words.length === 0 ? (
-                  <p className="text-sm text-zinc-400 italic pl-1">No words played</p>
-                ) : (
-                  <ol className="flex flex-col gap-1">
-                    {rh.words.map((entry, i) => (
-                      <li
-                        key={i}
-                        className="flex items-center gap-2 text-sm rounded-lg px-2 py-1.5"
-                      >
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full flex-none ${
-                            entry.playerId === myId ? 'bg-blue-500' : 'bg-zinc-400'
-                          }`}
-                        />
-                        <span className="font-medium flex-1 min-w-0 truncate">{entry.word}</span>
-                        {entry.breakdown.rareLetter > 0 && (
-                          <span className="text-xs px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium">
-                            rare
-                          </span>
-                        )}
-                        {entry.breakdown.longWord > 0 && (
-                          <span className="text-xs px-1.5 py-0.5 rounded-md bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 font-medium">
-                            long
-                          </span>
-                        )}
-                        <span className="text-xs tabular-nums text-zinc-500 ml-auto">
-                          +{entry.points}
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
-                )}
-              </div>
-            ))
+              ))}
+            </div>
           )}
         </div>
 
-        {/* Google link prompt — shown once on mobile after first win */}
+        {/* Google link prompt */}
         {showLinkPrompt && (
-          <div className="flex-none mx-4 mb-2 rounded-2xl border border-black/[.08] dark:border-white/[.08] bg-background px-4 py-3 flex items-center gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">Save your progress</p>
-              <p className="text-xs text-zinc-500">Link Google to recover your account on any device</p>
+          <div style={{ margin: '0 16px 8px', border: '1px solid var(--accent-warm-light)', borderRadius: 'var(--radius-lg)', background: 'var(--accent-warm-faint)', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--n800)', marginBottom: '2px' }}>Save your progress</div>
+              <div style={{ fontSize: '12px', color: 'var(--n500)' }}>Link Google to recover your account on any device</div>
             </div>
-            <a
-              href="/api/auth/google"
-              className="flex-none text-xs font-semibold text-blue-600 dark:text-blue-400 whitespace-nowrap"
-            >
-              Link
-            </a>
+            <a href="/api/auth/google" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-warm-muted)', whiteSpace: 'nowrap', textDecoration: 'none' }}>Link →</a>
             <button
-              onClick={() => {
-                localStorage.setItem('link_prompt_dismissed', '1')
-                setShowLinkPrompt(false)
-              }}
-              className="flex-none text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+              onClick={() => { localStorage.setItem('link_prompt_dismissed', '1'); setShowLinkPrompt(false) }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--n400)', fontSize: '16px', padding: '0 2px' }}
               aria-label="Dismiss"
-            >
-              ✕
-            </button>
+            >×</button>
           </div>
         )}
 
         {/* Actions */}
-        <div className="flex-none border-t border-black/[.08] dark:border-white/[.08] px-4 pt-4 pb-8 space-y-3">
+        <div style={{ flexShrink: 0, borderTop: '1px solid var(--n100)', padding: '16px 16px 32px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {rematchState === 'idle' ? (
-            <button
-              onClick={sendRematchRequest}
-              className="h-12 w-full rounded-2xl bg-foreground text-background text-sm font-semibold transition-opacity hover:opacity-80 active:opacity-60"
-            >
-              Rematch
-            </button>
+            <Button variant="primary" size="lg" full onClick={sendRematchRequest}>Rematch</Button>
           ) : (
-            <div className="h-12 w-full rounded-2xl border border-black/[.08] dark:border-white/[.08] flex items-center justify-center gap-2">
-              <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-foreground border-t-transparent" />
-              <span className="text-sm text-zinc-500">Waiting for opponent…</span>
+            <div style={{ height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', border: '1px solid var(--n200)', borderRadius: 'var(--radius-md)', background: 'var(--n0)' }}>
+              <div style={{ width: '14px', height: '14px', border: '2px solid var(--n300)', borderTopColor: 'var(--n700)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              <span style={{ fontSize: '13px', color: 'var(--n500)' }}>Waiting for opponent…</span>
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </div>
           )}
-          <button
-            onClick={() => router.push('/')}
-            className="h-10 w-full rounded-2xl border border-black/[.08] dark:border-white/[.08] text-sm font-medium transition-colors hover:bg-black/[.04] dark:hover:bg-white/[.04]"
-          >
-            Back to lobby
-          </button>
+          <Button variant="secondary" size="lg" full onClick={() => router.push('/')}>Back to lobby</Button>
           {showInstallPrompt && (
-            <button
+            <Button
+              variant="ghost"
+              size="md"
+              full
               onClick={async () => {
                 const prompt = deferredInstallRef.current
                 if (!prompt) return
@@ -422,10 +435,9 @@ function GameContent() {
                   localStorage.setItem('install_prompt_dismissed', '1')
                 }
               }}
-              className="h-10 w-full rounded-2xl border border-black/[.08] dark:border-white/[.08] text-sm font-medium transition-colors hover:bg-black/[.04] dark:hover:bg-white/[.04]"
             >
               Add to Home Screen
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -437,8 +449,9 @@ function GameContent() {
   const round = matchState.currentRound
   if (!round) {
     return (
-      <div className="flex min-h-full items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-foreground border-t-transparent" />
+      <div style={S.centeredFull}>
+        <div style={{ width: 28, height: 28, border: '3px solid var(--n200)', borderTopColor: 'var(--n900)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     )
   }
@@ -448,119 +461,121 @@ function GameContent() {
   const myWins = matchState.roundWins[myId] ?? 0
   const oppWins = matchState.roundWins[opponentId] ?? 0
   const myFaults = round.faults[myId] ?? 0
-  const timerPct = timeLeft / TURN_SECONDS
+  const timerPct = (timeLeft / TURN_SECONDS) * 100
   const timerUrgent = timeLeft <= 5
+  const lastWord = round.chain[round.chain.length - 1]
+  const nextSeed = lastWord ? lastWord.slice(-2).toUpperCase() : round.seedLetter.toUpperCase()
 
   return (
-    <div className="flex flex-col min-h-full bg-background text-foreground">
+    <div style={S.page}>
       {/* Round-end overlay */}
       {roundEnd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="rounded-2xl border border-black/[.08] dark:border-white/[.08] bg-background px-10 py-8 text-center shadow-lg">
-            <p className="text-sm font-medium text-zinc-500 mb-1">Round {roundEnd.roundNumber} over</p>
-            <p className="text-xl font-bold">
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(250,250,249,0.85)', backdropFilter: 'blur(4px)' }}>
+          <div style={{ border: '1px solid var(--n200)', borderRadius: 'var(--radius-xl)', background: 'var(--n0)', padding: '32px 44px', textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.08)' }}>
+            <p style={{ fontSize: '12px', fontWeight: 500, color: 'var(--n400)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
+              Round {roundEnd.roundNumber} complete
+            </p>
+            <p style={{ fontFamily: 'var(--font-display)', fontSize: '22px', color: 'var(--n900)' }}>
               {roundEnd.winnerId === myId ? 'You won this round!' : 'Opponent won this round'}
             </p>
           </div>
         </div>
       )}
 
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-black/[.08] dark:border-white/[.08]">
-        {/* Round wins */}
-        <div className="flex items-center gap-2 min-w-[64px]">
-          <span className="text-2xl font-bold tabular-nums">{myWins}</span>
-          <span className="text-zinc-400">–</span>
-          <span className="text-2xl font-bold tabular-nums">{oppWins}</span>
+      {/* Game header */}
+      <div style={{ background: 'var(--n0)', borderBottom: '1px solid var(--n200)', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+        <button
+          onClick={() => router.push('/')}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: 'var(--n400)', padding: '4px', lineHeight: 1 }}
+          aria-label="Back to lobby"
+        >←</button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n900)' }}>Classic Duel</div>
+          <div style={{ fontSize: '11px', color: 'var(--n400)', fontFamily: 'var(--font-mono)' }}>Round {round.roundNumber}</div>
         </div>
+        <span style={S.scoreText}>{myWins} – {oppWins}</span>
+      </div>
 
-        {/* Round label */}
-        <span className="text-sm font-medium text-zinc-500">Round {round.roundNumber}</span>
-
-        {/* Countdown */}
-        <div className={`flex items-center gap-1.5 min-w-[64px] justify-end ${timerUrgent ? 'text-red-500' : ''}`}>
-          {/* Progress bar */}
-          <div className="h-1.5 w-10 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all ${timerUrgent ? 'bg-red-500' : 'bg-foreground'}`}
-              style={{ width: `${timerPct * 100}%` }}
-            />
+      {/* Player row */}
+      <div style={{ background: 'var(--n0)', borderBottom: '1px solid var(--n100)', padding: '10px 14px', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+          <Avatar name="You" variant="p1" size={28} />
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: 500, fontFamily: 'var(--font-heading)', color: 'var(--n800)' }}>You</div>
+            <div style={{ display: 'flex', gap: '3px', marginTop: '2px' }}>
+              {Array.from({ length: MAX_FAULTS }).map((_, i) => (
+                <span key={i} style={{ display: 'block', width: '6px', height: '6px', borderRadius: '50%', background: i < myFaults ? 'var(--danger)' : 'var(--n200)' }} />
+              ))}
+            </div>
           </div>
-          <span className="text-lg font-bold tabular-nums w-6 text-right">
-            {Math.ceil(timeLeft)}
-          </span>
         </div>
-      </header>
+        <span style={{ fontSize: '11px', color: 'var(--n300)', fontWeight: 500 }}>VS</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, justifyContent: 'flex-end' }}>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '12px', fontWeight: 500, fontFamily: 'var(--font-heading)', color: 'var(--n800)' }}>Opponent</div>
+          </div>
+          <Avatar name="?" variant="p2" size={28} />
+        </div>
+      </div>
 
       {/* Word chain */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 14px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignContent: 'center', justifyContent: 'center' }}>
         {round.chain.length === 0 ? (
-          <div className="flex h-full min-h-[160px] items-center justify-center text-center">
-            <div>
-              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Start with</p>
-              <p className="text-6xl font-bold uppercase tracking-tight">{round.seedLetter}</p>
+          <div style={{ textAlign: 'center', width: '100%' }}>
+            <div style={{ ...S.sectionLabel, marginBottom: '10px' }}>Start with</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '56px', color: 'var(--n900)', letterSpacing: '-1px' }}>
+              {round.seedLetter.toUpperCase()}
             </div>
           </div>
         ) : (
-          <ol className="flex flex-col gap-1.5">
-            {round.chain.map((word, i) => {
-              const isLatest = i === round.chain.length - 1
-              return (
-                <li
-                  key={i}
-                  className={`flex items-baseline gap-0.5 rounded-xl px-3 py-2 text-sm ${
-                    isLatest ? 'bg-foreground/[.06]' : ''
-                  }`}
-                >
-                  <span className="font-bold text-blue-500 uppercase">{word[0]}</span>
-                  <span className="font-medium">{word.slice(1)}</span>
-                  {isLatest && word.length > 0 && (
-                    <span className="ml-auto text-xs text-zinc-400">
-                      → <span className="font-semibold text-blue-500 uppercase">{word[word.length - 1]}</span>
-                    </span>
-                  )}
-                </li>
-              )
-            })}
-          </ol>
+          round.chain.map((word, i) => {
+            const isOwn = matchState.player1Id === myId
+              ? i % 2 === 0
+              : i % 2 !== 0
+            return (
+              <WordPill
+                key={i}
+                word={word}
+                variant={isOwn ? 'player1' : 'player2'}
+                size="sm"
+              />
+            )
+          })
         )}
       </div>
 
       {/* Bottom panel */}
-      <div className="border-t border-black/[.08] dark:border-white/[.08] px-4 pt-3 pb-5 space-y-3">
-        {/* Turn + fault row */}
-        <div className="flex items-center justify-between">
-          <span className={`text-sm font-medium ${isMyTurn ? 'text-green-600 dark:text-green-400' : 'text-zinc-400'}`}>
+      <div style={S.bottomPanel}>
+        {/* Timer */}
+        <div style={{ marginBottom: '10px' }}>
+          <TimerBar
+            percent={timerPct}
+            danger={timerUrgent}
+            label={`${Math.ceil(timeLeft)}s`}
+          />
+        </div>
+
+        {/* Turn indicator */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: isMyTurn ? 'var(--success)' : 'var(--n400)' }}>
             {isMyTurn ? 'Your turn' : "Opponent's turn"}
           </span>
-          {isMyTurn && (
-            <div className="flex items-center gap-1.5">
-              {Array.from({ length: MAX_FAULTS }).map((_, i) => (
-                <span
-                  key={i}
-                  className={`h-2 w-2 rounded-full ${
-                    i < myFaults
-                      ? 'bg-red-500'
-                      : 'border border-black/20 dark:border-white/20'
-                  }`}
-                />
-              ))}
-              <span className="ml-1 text-xs text-zinc-500 tabular-nums">
-                {MAX_FAULTS - myFaults}/{MAX_FAULTS}
-              </span>
-            </div>
+          {round.chain.length > 0 && (
+            <span style={{ fontSize: '12px', color: 'var(--n500)', fontFamily: 'var(--font-mono)' }}>
+              starts with <strong style={{ color: 'var(--n800)' }}>{nextSeed}</strong>
+            </span>
           )}
         </div>
 
-        {/* Inline feedback */}
+        {/* Feedback */}
         {feedback && (
-          <p className={`text-sm font-medium ${feedback.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+          <p style={{ fontSize: '13px', fontWeight: 500, color: feedback.ok ? 'var(--success)' : 'var(--danger)', marginBottom: '8px' }}>
             {feedback.text}
           </p>
         )}
 
         {/* Input row */}
-        <div className="flex gap-2">
+        <div style={{ display: 'flex', gap: '8px' }}>
           <input
             type="text"
             value={wordInput}
@@ -569,22 +584,25 @@ function GameContent() {
             disabled={!isMyTurn || submitting}
             placeholder={
               isMyTurn
-                ? `Word starting with ${round.seedLetter.toUpperCase()}…`
-                : "Waiting for opponent…"
+                ? round.chain.length === 0
+                  ? `Word starting with ${round.seedLetter.toUpperCase()}…`
+                  : `Word starting with ${nextSeed}…`
+                : 'Waiting for opponent…'
             }
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="none"
             spellCheck={false}
-            className="flex-1 h-12 rounded-xl border border-black/[.08] dark:border-white/[.08] bg-transparent px-3 text-sm placeholder:text-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-foreground/20"
+            style={{ ...S.input, opacity: !isMyTurn || submitting ? 0.45 : 1, cursor: !isMyTurn || submitting ? 'not-allowed' : 'text' }}
           />
-          <button
+          <Button
+            variant="primary"
+            size="md"
             onClick={submitWord}
             disabled={!isMyTurn || submitting || !wordInput.trim()}
-            className="h-12 px-5 rounded-xl bg-foreground text-background text-sm font-semibold disabled:opacity-30 disabled:cursor-not-allowed transition-opacity hover:opacity-80 active:opacity-60"
           >
-            {submitting ? '…' : 'Send'}
-          </button>
+            {submitting ? '…' : '→'}
+          </Button>
         </div>
       </div>
     </div>

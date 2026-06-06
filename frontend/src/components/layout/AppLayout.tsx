@@ -20,10 +20,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [player, setPlayer] = useState<PlayerInfo | null>(null)
 
   useEffect(() => {
-    setWindowWidth(window.innerWidth)
     const handleResize = () => setWindowWidth(window.innerWidth)
     window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
+    const t = setTimeout(() => setWindowWidth(window.innerWidth), 0)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      clearTimeout(t)
+    }
   }, [])
 
   useEffect(() => {

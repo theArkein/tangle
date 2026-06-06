@@ -6,7 +6,7 @@ The app shipped MVP with a minimal Tailwind/Geist font UI. Two design reference 
 - `ChainBattleDesignSystem.jsx` — full design token system (colors, typography, radii, component library)
 - `ChainBattleResponsive.jsx` — responsive prototype with sidebar+bottom-nav layout and all screens
 
-Goal: Upgrade the entire frontend to match the Chain Battle design language. Add Profile and League screens. League stays disabled (coming soon) since that feature is unbuilt. Include a System Design Doc for the project.
+Goal: Upgrade the entire frontend to match the Chain Battle design language. Add Profile and League screens. League stays disabled (coming soon) since that feature is unbuilt. Include a Design System Doc for the project.
 
 Approach chosen: **CSS custom properties + Tailwind** — tokens in `globals.css`, atoms in `frontend/src/components/ui/`, Tailwind utilities for spacing/layout.
 
@@ -28,10 +28,10 @@ Light mode only (no dark mode).
 10. `frontend/src/components/ui/TimerBar.tsx` — percent + danger mode (red when ≤5s) ✅
 11. `frontend/src/components/ui/Card.tsx` — base card wrapper with hover state ✅
 12. `frontend/src/app/page.tsx` — Home/lobby redesigned ✅
-13. `frontend/src/app/game/page.tsx` — game screen redesigned (mobile + desktop layouts)
-14. `frontend/src/app/profile/page.tsx` — NEW: profile screen
-15. `frontend/src/app/league/page.tsx` — NEW: league coming-soon screen
-16. `docs/SYSTEM_DESIGN.md` — system design document
+13. `frontend/src/app/game/page.tsx` — game screen redesigned (mobile + desktop layouts) ✅
+14. `frontend/src/app/profile/page.tsx` — NEW: profile screen ✅
+15. `frontend/src/app/league/page.tsx` — NEW: league coming-soon screen ✅
+16. `docs/DESIGN_SYSTEM.md` — design system document ✅
 
 ---
 
@@ -181,10 +181,10 @@ Data: `/api/me` + `/api/me/matches`
 3. ✅ `layout/` components — AppLayout, Sidebar, BottomNav, navItems
 4. ✅ `layout.tsx` — swap fonts, wrap with AppLayout
 5. ✅ `app/page.tsx` — rebuild lobby JSX
-6. `app/game/page.tsx` — rebuild game JSX
-7. `app/profile/page.tsx` — new screen
-8. `app/league/page.tsx` — new coming-soon screen
-9. `docs/SYSTEM_DESIGN.md` — system design document
+6. ✅ `app/game/page.tsx` — rebuild game JSX
+7. ✅ `app/profile/page.tsx` — new screen
+8. ✅ `app/league/page.tsx` — new coming-soon screen
+9. ✅ `docs/DESIGN_SYSTEM.md` — design system document
 
 ---
 
