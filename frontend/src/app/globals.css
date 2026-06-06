@@ -1,26 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Sora:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Neutral scale */
+  --n0: #FFFFFF;
+  --n50: #FAFAF9;
+  --n100: #F5F5F4;
+  --n200: #E7E5E4;
+  --n300: #D6D3D1;
+  --n400: #A8A29E;
+  --n500: #78716C;
+  --n600: #57534E;
+  --n700: #44403C;
+  --n800: #292524;
+  --n900: #1C1917;
+  --n950: #0F0E0D;
+
+  /* Accent */
+  --accent-warm: #C2A67D;
+  --accent-warm-light: #D4BFA0;
+  --accent-warm-muted: #A8916A;
+  --accent-warm-faint: rgba(194, 166, 125, 0.08);
+  --accent-warm-subtle: rgba(194, 166, 125, 0.15);
+
+  /* Semantic */
+  --success: #6B8F71;
+  --success-light: rgba(107, 143, 113, 0.12);
+  --danger: #C07070;
+  --danger-light: rgba(192, 112, 112, 0.12);
+  --warning: #C2A24D;
+  --warning-light: rgba(194, 162, 77, 0.12);
+  --info: #7D9AB5;
+  --info-light: rgba(125, 154, 181, 0.12);
+
+  /* Game */
+  --p1: #8B9E8B;
+  --p1-light: rgba(139, 158, 139, 0.15);
+  --p2: #A08B7B;
+  --p2-light: rgba(160, 139, 123, 0.15);
+  --danger-zone: #C07070;
+  --danger-zone-bg: rgba(192, 112, 112, 0.06);
+  --rare: #9B8DB5;
+  --rare-bg: rgba(155, 141, 181, 0.1);
+
+  /* Typography */
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --font-heading: 'Sora', 'Helvetica Neue', sans-serif;
+  --font-body: 'IBM Plex Sans', 'Helvetica Neue', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Menlo', monospace;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--n50);
+  color: var(--n900);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
 }
