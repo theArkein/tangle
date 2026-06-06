@@ -32,6 +32,9 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <ServiceWorkerRegistration />
         {children}
+        <span className="fixed bottom-2 right-3 text-[10px] text-zinc-400/50 select-none pointer-events-none font-mono">
+          {process.env.NEXT_PUBLIC_APP_VERSION}
+        </span>
       </body>
     </html>
   );
