@@ -57,9 +57,11 @@ jobs:
       - name: Check for migration changes
         id: migration-check
         run: |
-          git diff --name-only HEAD~1 HEAD -- migrations/ | grep -q '\.sql' \
-            && echo "pending=true" >> $GITHUB_OUTPUT \
-            || echo "pending=false" >> $GITHUB_OUTPUT
+          if git diff --name-only HEAD~1 HEAD -- migrations/ | grep -q '\.sql'; then
+            echo "pending=true" >> $GITHUB_OUTPUT
+          else
+            echo "pending=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Apply D1 migrations
         if: steps.migration-check.outputs.pending == 'true'
