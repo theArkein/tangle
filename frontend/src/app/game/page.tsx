@@ -1,6 +1,11 @@
 'use client'
 
 import { Suspense, useState, useEffect, useRef, useCallback } from 'react'
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
+}
 import { useSearchParams, useRouter } from 'next/navigation'
 
 // ── Backend types (mirrored from src/modules/MatchStateMachine.ts) ───────────
@@ -72,8 +77,10 @@ function GameContent() {
   const [roundHistory, setRoundHistory] = useState<RoundHistoryEntry[]>([])
   const [rematchState, setRematchState] = useState<'idle' | 'pending'>('idle')
   const [showLinkPrompt, setShowLinkPrompt] = useState(false)
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false)
 
   const wsRef = useRef<WebSocket | null>(null)
+  const deferredInstallRef = useRef<BeforeInstallPromptEvent | null>(null)
   const prevStateRef = useRef<MatchState | null>(null)
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -216,6 +223,27 @@ function GameContent() {
       /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
     ) {
       setShowLinkPrompt(true)
+    }
+  }, [matchState?.status, matchState?.matchWinnerId, myId])
+
+  // Capture install prompt — show after first match win
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault()
+      deferredInstallRef.current = e as BeforeInstallPromptEvent
+    }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  useEffect(() => {
+    if (
+      matchState?.status === 'match_complete' &&
+      matchState.matchWinnerId === myId &&
+      deferredInstallRef.current &&
+      !localStorage.getItem('install_prompt_dismissed')
+    ) {
+      setShowInstallPrompt(true)
     }
   }, [matchState?.status, matchState?.matchWinnerId, myId])
 
@@ -383,6 +411,24 @@ function GameContent() {
           >
             Back to lobby
           </button>
+          {showInstallPrompt && (
+            <button
+              onClick={async () => {
+                const prompt = deferredInstallRef.current
+                if (!prompt) return
+                await prompt.prompt()
+                const { outcome } = await prompt.userChoice
+                deferredInstallRef.current = null
+                setShowInstallPrompt(false)
+                if (outcome === 'dismissed') {
+                  localStorage.setItem('install_prompt_dismissed', '1')
+                }
+              }}
+              className="h-10 w-full rounded-2xl border border-black/[.08] dark:border-white/[.08] text-sm font-medium transition-colors hover:bg-black/[.04] dark:hover:bg-white/[.04]"
+            >
+              Add to Home Screen
+            </button>
+          )}
         </div>
       </div>
     )
