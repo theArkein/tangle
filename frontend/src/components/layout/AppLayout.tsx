@@ -12,16 +12,16 @@ export interface PlayerInfo {
 
 interface AppLayoutProps {
   children: ReactNode
-  player: PlayerInfo | null
 }
 
 function getWidth(): number {
   return typeof window !== 'undefined' ? window.innerWidth : 1200
 }
 
-export default function AppLayout({ children, player }: AppLayoutProps) {
+export default function AppLayout({ children }: AppLayoutProps) {
   const pathname = usePathname()
   const [windowWidth, setWindowWidth] = useState<number>(getWidth)
+  const [player, setPlayer] = useState<PlayerInfo | null>(null)
 
   useEffect(() => {
     function handleResize() {
@@ -29,6 +29,13 @@ export default function AppLayout({ children, player }: AppLayoutProps) {
     }
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/me')
+      .then(r => r.json())
+      .then((data: PlayerInfo) => setPlayer(data))
+      .catch(() => {})
   }, [])
 
   // Game routes opt out of navigation shell
