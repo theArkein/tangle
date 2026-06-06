@@ -1,5 +1,5 @@
 export { GameRoom } from "./durable-objects/GameRoom";
-import { handleMe } from "./routes/auth";
+import { handleMe, handleUpdateMe } from "./routes/auth";
 import { handleMatchmake } from "./routes/matchmake";
 import { handleMatches } from "./routes/matches";
 import { handleGoogleAuth, handleGoogleCallback } from "./routes/oauth";
@@ -24,6 +24,7 @@ export default {
     }
 
     if (url.pathname === "/api/me") {
+      if (request.method === "PATCH") return handleUpdateMe(request, env);
       return handleMe(request, env);
     }
 

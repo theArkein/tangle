@@ -82,6 +82,7 @@ function GameContent() {
   const roomId = searchParams.get('room') ?? ''
 
   const [myId, setMyId] = useState<string | null>(null)
+  const [googleLinked, setGoogleLinked] = useState(false)
   const [matchState, setMatchState] = useState<MatchState | null>(null)
   const [waitingCount, setWaitingCount] = useState<number | null>(null)
   const [disconnected, setDisconnected] = useState(false)
@@ -106,7 +107,7 @@ function GameContent() {
     if (!roomId) return
     fetch('/api/me')
       .then(r => r.json())
-      .then((d: { id: string }) => setMyId(d.id))
+      .then((d: { id: string; google_linked: boolean }) => { setMyId(d.id); setGoogleLinked(d.google_linked) })
       .catch(() => {})
   }, [roomId])
 
@@ -232,12 +233,13 @@ function GameContent() {
     if (
       matchState?.status === 'match_complete' &&
       matchState.matchWinnerId === myId &&
+      !googleLinked &&
       !localStorage.getItem('link_prompt_dismissed')
     ) {
       const t = setTimeout(() => setShowLinkPrompt(true), 0)
       return () => clearTimeout(t)
     }
-  }, [matchState?.status, matchState?.matchWinnerId, myId])
+  }, [matchState?.status, matchState?.matchWinnerId, myId, googleLinked])
 
   // Capture install prompt — show after first match win
   useEffect(() => {

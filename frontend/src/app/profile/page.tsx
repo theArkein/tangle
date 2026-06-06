@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react'
 import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
+import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 
 interface PlayerData {
   id: string
   display_name: string
   elo: number
+  google_linked: boolean
 }
 
 interface MatchRecord {
@@ -23,6 +25,10 @@ export default function ProfilePage() {
   const [player, setPlayer] = useState<PlayerData | null>(null)
   const [matches, setMatches] = useState<MatchRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(false)
+  const [nameInput, setNameInput] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [nameError, setNameError] = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -34,6 +40,28 @@ export default function ProfilePage() {
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
+
+  async function saveName() {
+    if (!player) return
+    setNameError(null)
+    setSaving(true)
+    try {
+      const res = await fetch('/api/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ display_name: nameInput }),
+      })
+      if (!res.ok) {
+        setNameError(await res.text())
+        return
+      }
+      const data = await res.json() as { display_name: string }
+      setPlayer(p => p ? { ...p, display_name: data.display_name } : p)
+      setEditing(false)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -62,13 +90,78 @@ export default function ProfilePage() {
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
           <Avatar name={player.display_name} variant="p1" size={52} />
         </div>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: '22px', color: 'var(--n900)', marginBottom: '8px' }}>
-          {player.display_name}
-        </div>
+
+        {/* Name row */}
+        {editing ? (
+          <div style={{ marginBottom: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <input
+                value={nameInput}
+                onChange={e => { setNameInput(e.target.value); setNameError(null) }}
+                maxLength={24}
+                autoFocus
+                onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setEditing(false) }}
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: '18px',
+                  color: 'var(--n900)',
+                  border: '1.5px solid var(--n300)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '4px 10px',
+                  background: 'var(--n0)',
+                  outline: 'none',
+                  width: '180px',
+                  textAlign: 'center',
+                }}
+              />
+              <Button variant="primary" size="sm" onClick={saveName} disabled={saving}>
+                {saving ? '…' : 'Save'}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => { setEditing(false); setNameError(null) }}>
+                Cancel
+              </Button>
+            </div>
+            {nameError && (
+              <div style={{ fontSize: '11px', color: 'var(--danger)', marginTop: '6px' }}>{nameError}</div>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '22px', color: 'var(--n900)' }}>
+              {player.display_name}
+            </div>
+            {player.google_linked && (
+              <button
+                onClick={() => { setNameInput(player.display_name); setEditing(true) }}
+                title="Rename"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--n400)',
+                  padding: '3px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  borderRadius: 'var(--radius-sm)',
+                  lineHeight: 1,
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
+
         <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
           <Badge variant="neutral">
             <span style={{ fontFamily: 'var(--font-mono)' }}>ELO {player.elo}</span>
           </Badge>
+          {player.google_linked && (
+            <Badge variant="info">Google linked</Badge>
+          )}
         </div>
       </Card>
 
