@@ -13,7 +13,7 @@ import {
   type RoundHistoryEntry,
 } from "../modules/MatchPersistence";
 
-const TURN_TIMEOUT_MS = 15_000;
+const TURN_TIMEOUT_MS = 60_000;
 const REMATCH_TIMEOUT_MS = 30_000;
 const SEED_LETTERS = "abcdefghijklmnoprstw";
 
