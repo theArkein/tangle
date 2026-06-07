@@ -3,13 +3,21 @@ import type { Category, PowerUpDefinition, Rarity } from "./types";
 
 // Trigger → category mapping. Each earning trigger draws from a specific
 // thematic pool. Adding a new trigger = appending one row.
-export type DropSource = "score_threshold" | "rare_letter" | "long_word";
+export type DropSource =
+  | "score_threshold"
+  | "rare_letter"
+  | "long_word"
+  | "chain_length";
 
 export const TRIGGER_CATEGORY: Record<DropSource, Category> = {
   score_threshold: "defensive",
   rare_letter: "offensive",
   long_word: "offensive",
+  chain_length: "disruption",
 };
+
+// Number of words in the chain that triggers the "long chain" disruption drop.
+export const CHAIN_LENGTH_THRESHOLD = 10;
 
 // Rarity weights within a pool. Forward-compatible: in Phase 1 every
 // definition is `common`, so this is effectively a no-op.

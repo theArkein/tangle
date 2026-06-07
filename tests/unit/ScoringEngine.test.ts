@@ -6,6 +6,7 @@ describe("ScoringEngine", () => {
     expect(score("cat")).toEqual({
       points: 3,
       breakdown: { base: 3, rareLetter: 0, longWord: 0 },
+      multiplier: 1,
     });
   });
 
@@ -13,6 +14,7 @@ describe("ScoringEngine", () => {
     expect(score("elephant")).toEqual({
       points: 13,
       breakdown: { base: 8, rareLetter: 0, longWord: 5 },
+      multiplier: 1,
     });
   });
 
@@ -20,6 +22,7 @@ describe("ScoringEngine", () => {
     expect(score("ax")).toEqual({
       points: 3,
       breakdown: { base: 2, rareLetter: 1, longWord: 0 },
+      multiplier: 1,
     });
   });
 
@@ -27,6 +30,7 @@ describe("ScoringEngine", () => {
     expect(score("jazz")).toEqual({
       points: 6,
       breakdown: { base: 4, rareLetter: 2, longWord: 0 },
+      multiplier: 1,
     });
   });
 
@@ -34,6 +38,7 @@ describe("ScoringEngine", () => {
     expect(score("xylophone")).toEqual({
       points: 15,
       breakdown: { base: 9, rareLetter: 1, longWord: 5 },
+      multiplier: 1,
     });
   });
 
@@ -41,6 +46,23 @@ describe("ScoringEngine", () => {
     expect(score("a")).toEqual({
       points: 1,
       breakdown: { base: 1, rareLetter: 0, longWord: 0 },
+      multiplier: 1,
+    });
+  });
+
+  it('applies a multiplier to the total', () => {
+    expect(score("cat", { multiplier: 3 })).toEqual({
+      points: 9,
+      breakdown: { base: 3, rareLetter: 0, longWord: 0 },
+      multiplier: 3,
+    });
+  });
+
+  it('applies a multiplier to the long-word bonus too', () => {
+    expect(score("elephant", { multiplier: 2 })).toEqual({
+      points: 26,
+      breakdown: { base: 8, rareLetter: 0, longWord: 5 },
+      multiplier: 2,
     });
   });
 });

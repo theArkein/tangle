@@ -7,9 +7,30 @@ import {
 import { pickFromCategory, RARITY_WEIGHTS, TRIGGER_CATEGORY } from "../../src/modules/powerups/pools";
 
 describe("Power-up registry", () => {
-  it("contains the four Phase 1 power-ups", () => {
+  it("contains all 12 power-ups from Phases 1 and 2", () => {
     const ids = REGISTRY.map((d) => d.id).sort();
-    expect(ids).toEqual(["block", "freeze", "letterBomb", "secondLife"]);
+    expect(ids).toEqual([
+      "blind",
+      "blitz",
+      "block",
+      "freeze",
+      "letterBomb",
+      "peek",
+      "rush",
+      "secondLife",
+      "shrink",
+      "steal",
+      "swap",
+      "wildfire",
+    ]);
+  });
+
+  it("has at least one definition in each category", () => {
+    const categories = new Set(REGISTRY.map((d) => d.category));
+    expect(categories.has("defensive")).toBe(true);
+    expect(categories.has("offensive")).toBe(true);
+    expect(categories.has("disruption")).toBe(true);
+    expect(categories.has("chaos")).toBe(true);
   });
 
   it("has unique ids", () => {

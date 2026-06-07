@@ -6,7 +6,8 @@ export type ValidationResult =
         | "wrong_start"
         | "not_in_dictionary"
         | "duplicate"
-        | "missing_required_letter";
+        | "missing_required_letter"
+        | "exceeds_max_length";
     };
 
 export interface Dictionary {
@@ -15,6 +16,7 @@ export interface Dictionary {
 
 export interface ValidateOptions {
   requiredContainingLetter?: string | undefined;
+  maxLength?: number | undefined;
 }
 
 export async function validate(
@@ -33,6 +35,10 @@ export async function validate(
 
   if (usedWords.has(normalised)) {
     return { valid: false, reason: "duplicate" };
+  }
+
+  if (options.maxLength !== undefined && normalised.length > options.maxLength) {
+    return { valid: false, reason: "exceeds_max_length" };
   }
 
   if (options.requiredContainingLetter) {

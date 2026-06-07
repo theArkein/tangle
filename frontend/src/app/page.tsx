@@ -22,6 +22,7 @@ interface RecentMatch {
 }
 
 type Phase = 'idle' | 'waiting'
+type GameMode = 'classic' | 'speed_round'
 
 function relativeTime(ts: number): string {
   const diff = Date.now() - ts
@@ -41,9 +42,12 @@ export default function LobbyPage() {
   const [phase, setPhase] = useState<Phase>('idle')
   const [token, setToken] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [mode, setMode] = useState<GameMode>('classic')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('game_mode') : null
+    if (stored === 'speed_round' || stored === 'classic') setMode(stored)
     fetch('/api/me')
       .then(r => r.json())
       .then(data => setPlayer(data as PlayerInfo))
@@ -53,6 +57,11 @@ export default function LobbyPage() {
       .then(data => setRecentMatches(data as RecentMatch[]))
       .catch(() => setRecentMatches([]))
   }, [])
+
+  function selectMode(next: GameMode) {
+    setMode(next)
+    if (typeof window !== 'undefined') localStorage.setItem('game_mode', next)
+  }
 
   useEffect(() => {
     if (phase !== 'waiting' || !token) {
@@ -77,7 +86,11 @@ export default function LobbyPage() {
   }, [phase, token, router])
 
   async function handlePlay() {
-    const res = await fetch('/api/matchmake', { method: 'POST' })
+    const res = await fetch('/api/matchmake', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode }),
+    })
     const body = (await res.json()) as { status: string; token?: string; roomId?: string }
     if (body.status === 'matched' && body.roomId) {
       router.push(`/game/?room=${body.roomId}`)
@@ -113,6 +126,42 @@ export default function LobbyPage() {
             <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--n400)', marginTop: 6 }}>
               Build the longest word chain to win
             </p>
+          </div>
+
+          {/* Mode picker */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: 'var(--n400)', marginBottom: 6 }}>
+              Game mode
+            </div>
+            <div role="tablist" style={{ display: 'flex', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--n200)' }}>
+              {([
+                { id: 'classic', label: 'Classic', subtitle: '60s · best of 5 · power-ups' },
+                { id: 'speed_round', label: 'Speed', subtitle: '8s · single round · no power-ups' },
+              ] as const).map(opt => {
+                const active = mode === opt.id
+                return (
+                  <button
+                    key={opt.id}
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => selectMode(opt.id)}
+                    style={{
+                      flex: 1,
+                      padding: '10px 12px',
+                      background: active ? 'var(--n900)' : 'var(--n0)',
+                      color: active ? 'var(--n0)' : 'var(--n700)',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-heading)',
+                      borderRight: opt.id === 'classic' ? '1px solid var(--n200)' : 'none',
+                    }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{opt.label}</div>
+                    <div style={{ fontSize: 10, opacity: 0.7, marginTop: 2 }}>{opt.subtitle}</div>
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           {/* Action buttons */}
