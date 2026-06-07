@@ -466,7 +466,7 @@ function GameContent() {
   const timerPct = (timeLeft / TURN_SECONDS) * 100
   const timerUrgent = timeLeft <= 5
   const lastWord = round.chain[round.chain.length - 1]
-  const nextSeed = lastWord ? lastWord.slice(-2).toUpperCase() : round.seedLetter.toUpperCase()
+  const nextSeed = lastWord ? lastWord.slice(-1).toUpperCase() : round.seedLetter.toUpperCase()
 
   return (
     <div style={S.page}>
