@@ -14,6 +14,7 @@ function waitingState(): MatchState {
     player1Id: P1,
     player2Id: P2,
     roundWins: { [P1]: 0, [P2]: 0 },
+    gameMode: "classic",
   };
 }
 
@@ -236,6 +237,48 @@ describe("MatchStateMachine", () => {
       if (state.currentRound) {
         expect(state.currentRound.roundWinnerId).toBe(P2);
       }
+    });
+  });
+
+  describe("Speed Round game mode", () => {
+    function speedRoundActive(): MatchState {
+      const waiting: MatchState = {
+        status: "waiting",
+        player1Id: P1,
+        player2Id: P2,
+        roundWins: { [P1]: 0, [P2]: 0 },
+        gameMode: "speed_round",
+      };
+      return transition(waiting, {
+        type: "start",
+        player1Id: P1,
+        player2Id: P2,
+        seedLetter: "A",
+        gameMode: "speed_round",
+      }).state;
+    }
+
+    it("ends the match on a single timeout in Speed Round", () => {
+      const state0 = speedRoundActive();
+      const { state, effects } = transition(state0, {
+        type: "turnTimeout",
+        playerId: P1,
+      });
+
+      expect(state.status).toBe("match_complete");
+      expect(state.matchWinnerId).toBe(P2);
+      expect(effects).toContainEqual({ type: "matchOver", winnerId: P2 });
+    });
+
+    it("ends the round on the first fault in Speed Round (1 fault to lose)", () => {
+      const state0 = speedRoundActive();
+      const { state } = transition(state0, {
+        type: "invalidWord",
+        playerId: P1,
+      });
+      // 1 fault → round ends → since only 1 round to win → match completes
+      expect(state.status).toBe("match_complete");
+      expect(state.matchWinnerId).toBe(P2);
     });
   });
 

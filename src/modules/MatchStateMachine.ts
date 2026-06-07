@@ -5,6 +5,7 @@ import {
   type DropTriggers,
   type PowerUpInventory,
 } from "./powerups/types";
+import { getModeConfig, type GameMode } from "./gameModes";
 
 export type PlayerId = string;
 
@@ -38,14 +39,15 @@ export interface MatchState {
   player1Id: PlayerId;
   player2Id: PlayerId;
   roundWins: Record<PlayerId, number>;
+  gameMode: GameMode;
   currentRound?: RoundState | undefined;
   roundEndContext?: RoundEndContext | undefined;
   matchWinnerId?: PlayerId | undefined;
 }
 
 export type MatchEvent =
-  | { type: "start"; player1Id: PlayerId; player2Id: PlayerId; seedLetter: string }
-  | { type: "wordSubmitted"; playerId: PlayerId; word: string; points: number }
+  | { type: "start"; player1Id: PlayerId; player2Id: PlayerId; seedLetter: string; gameMode?: GameMode }
+  | { type: "wordSubmitted"; playerId: PlayerId; word: string; points: number; nextPlayerOverride?: PlayerId | undefined }
   | { type: "invalidWord"; playerId: PlayerId }
   | { type: "turnTimeout"; playerId: PlayerId; secondLifeConsumed?: boolean }
   | { type: "nextRoundRequested"; playerId: PlayerId }
@@ -69,8 +71,9 @@ export interface TransitionResult {
   effects: Effect[];
 }
 
+// Backward-compatible default — Classic mode value. New code should read from
+// gameModes.getModeConfig(state.gameMode).faultsToLoseRound.
 export const FAULTS_TO_LOSE_ROUND = 8;
-const ROUNDS_TO_WIN_MATCH = 3;
 const SEED_LETTERS = "abcdefghijklmnoprstw";
 
 function randomSeedLetter(): string {
@@ -114,8 +117,9 @@ function endRound(
   };
 
   const winnerRoundWins = newRoundWins[winnerId] ?? 0;
+  const roundsToWin = getModeConfig(state.gameMode).roundsToWinMatch;
 
-  if (winnerRoundWins >= ROUNDS_TO_WIN_MATCH) {
+  if (winnerRoundWins >= roundsToWin) {
     // Match complete.
     const completedRound: RoundState | undefined = state.currentRound
       ? { ...state.currentRound, roundWinnerId: winnerId }
@@ -194,6 +198,7 @@ export function transition(state: MatchState, event: MatchEvent): TransitionResu
           [event.player1Id]: 0,
           [event.player2Id]: 0,
         },
+        gameMode: event.gameMode ?? state.gameMode ?? "classic",
         currentRound: round,
       };
 
@@ -209,7 +214,8 @@ export function transition(state: MatchState, event: MatchEvent): TransitionResu
       }
 
       const round = state.currentRound;
-      const nextPlayerId = otherPlayer(state, event.playerId);
+      // Blitz can force the same player to play again.
+      const nextPlayerId = event.nextPlayerOverride ?? otherPlayer(state, event.playerId);
 
       const updatedScores: Record<PlayerId, number> = {
         ...round.playerRoundScores,
@@ -248,7 +254,8 @@ export function transition(state: MatchState, event: MatchEvent): TransitionResu
         [event.playerId]: newFaultCount,
       };
 
-      if (newFaultCount >= FAULTS_TO_LOSE_ROUND) {
+      const faultsToLose = getModeConfig(state.gameMode).faultsToLoseRound;
+      if (newFaultCount >= faultsToLose) {
         const winnerId = otherPlayer(state, event.playerId);
         const stateWithFault: MatchState = {
           ...state,
@@ -374,6 +381,7 @@ export function transition(state: MatchState, event: MatchEvent): TransitionResu
           [state.player1Id]: 0,
           [state.player2Id]: 0,
         },
+        gameMode: state.gameMode,
       };
 
       return {

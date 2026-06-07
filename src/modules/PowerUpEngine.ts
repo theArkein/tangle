@@ -3,12 +3,17 @@ import {
   getDefinition,
   FREEZE_DURATION_MS,
   pickHardLetter,
+  BLIND_TURNS,
+  SHRINK_MAX_LENGTH,
+  PEEK_TURNS,
+  WILDFIRE_MULTIPLIER,
+  WILDFIRE_TURNS,
 } from "./powerups";
 import {
   pickFromCategory,
   TRIGGER_CATEGORY,
   SCORE_THRESHOLD_POINTS,
-  type DropSource,
+  CHAIN_LENGTH_THRESHOLD,
 } from "./powerups/pools";
 import type {
   ActiveEffect,
@@ -39,6 +44,7 @@ export interface EvaluateDropsInput {
   newRoundScore: number;
   breakdown: ScoreBreakdown;
   triggers: DropTriggers;
+  chainLength?: number;
   rng?: () => number;
 }
 
@@ -51,6 +57,7 @@ export interface EvaluateDropsResult {
 // Pure — does not mutate inputs.
 export function evaluateDrops(input: EvaluateDropsInput): EvaluateDropsResult {
   const { playerId, prevRoundScore, newRoundScore, breakdown, triggers } = input;
+  const chainLength = input.chainLength ?? 0;
   const rng = input.rng ?? Math.random;
 
   const drops: PowerUpDrop[] = [];
@@ -58,6 +65,7 @@ export function evaluateDrops(input: EvaluateDropsInput): EvaluateDropsResult {
     thresholdsCrossed: { ...triggers.thresholdsCrossed },
     rareLetterDropped: { ...triggers.rareLetterDropped },
     longWordDropped: { ...triggers.longWordDropped },
+    chainLengthDropped: { ...triggers.chainLengthDropped },
   };
 
   // 1) Score threshold crossings (can be multiple from a single word).
@@ -86,6 +94,16 @@ export function evaluateDrops(input: EvaluateDropsInput): EvaluateDropsResult {
     nextTriggers.longWordDropped[playerId] = true;
   }
 
+  // 4) Chain reaches 10+ words for the first time this round (once per player).
+  if (
+    chainLength >= CHAIN_LENGTH_THRESHOLD &&
+    !triggers.chainLengthDropped[playerId]
+  ) {
+    const def = pickFromCategory(TRIGGER_CATEGORY.chain_length, rng);
+    if (def) drops.push({ playerId, id: def.id, source: "chain_length" });
+    nextTriggers.chainLengthDropped[playerId] = true;
+  }
+
   return { drops, triggers: nextTriggers };
 }
 
@@ -100,7 +118,8 @@ export type ActivateError =
   | "not_in_inventory"
   | "unknown_powerup"
   | "wrong_turn"
-  | "no_word_to_block";
+  | "no_word_to_block"
+  | "powerups_disabled";
 
 export interface ActivateInput {
   inventory: PowerUpInventory;
@@ -119,11 +138,20 @@ export interface ActivateResult {
   effect?: ActiveEffect | undefined;
 }
 
+function withoutEffectsMatching(
+  effects: ActiveEffect[],
+  predicate: (e: ActiveEffect) => boolean
+): ActiveEffect[] {
+  return effects.filter((e) => !predicate(e));
+}
+
 // Pure dispatcher. Returns the updated inventory + active effects.
-// Side effects (like Block consuming an opponent's last word, which mutates the chain)
-// are surfaced via the returned `effect` so the caller can apply them.
+// Side-effecting power-ups (Block, Steal, Swap, Blitz) surface their semantics
+// via the returned `effect` or the registered ActiveEffect; the caller (GameRoom)
+// performs the chain mutation / turn-skip / etc.
 export function activate(input: ActivateInput): ActivateResult {
   const { inventory, activeEffects, powerUpId, byPlayerId, opponentId, now } = input;
+  const rng = input.rng ?? Math.random;
 
   if (!getDefinition(powerUpId)) {
     return { inventory, activeEffects, error: "unknown_powerup" };
@@ -147,43 +175,129 @@ export function activate(input: ActivateInput): ActivateResult {
         onPlayerId: opponentId,
         expiresAt: now + FREEZE_DURATION_MS,
       };
-      nextEffects = [...activeEffects.filter((e) => e.kind !== "freeze"), effect];
+      nextEffects = [
+        ...withoutEffectsMatching(activeEffects, (e) => e.kind === "freeze" && e.onPlayerId === opponentId),
+        effect,
+      ];
       break;
     }
     case "secondLife": {
-      // Arms the activator (themselves) — consumed by a future timeout.
       effect = { kind: "secondLifeArmed", forPlayerId: byPlayerId };
       nextEffects = [
-        ...activeEffects.filter(
-          (e) => !(e.kind === "secondLifeArmed" && e.forPlayerId === byPlayerId)
+        ...withoutEffectsMatching(
+          activeEffects,
+          (e) => e.kind === "secondLifeArmed" && e.forPlayerId === byPlayerId
         ),
         effect,
       ];
       break;
     }
     case "letterBomb": {
-      const rng = input.rng ?? Math.random;
       effect = {
         kind: "letterBomb",
         onPlayerId: opponentId,
         requiredLetter: pickHardLetter(rng),
       };
       nextEffects = [
-        ...activeEffects.filter(
-          (e) => !(e.kind === "letterBomb" && e.onPlayerId === opponentId)
+        ...withoutEffectsMatching(
+          activeEffects,
+          (e) => e.kind === "letterBomb" && e.onPlayerId === opponentId
         ),
         effect,
       ];
       break;
     }
     case "block": {
-      // Block consumes the opponent's last word. The actual chain mutation
-      // happens in GameRoom which has access to the chain — we just surface
-      // the effect here. No persistent active effect.
+      // Block consumes the opponent's last word. Chain mutation happens in
+      // GameRoom; no persistent active effect.
       effect = undefined;
-      // Caller checks the returned effect for `block` semantics indirectly —
-      // we return effect=undefined and rely on the caller to recognize the
-      // powerUpId. Inventory has been decremented.
+      break;
+    }
+    case "swap": {
+      // Swap is a two-step activation: first arms a pending swap waiting for the
+      // user to choose a letter; GameRoom then drives the second message
+      // (swap_choose_letter) which applies the new seed letter directly.
+      effect = { kind: "swapPending", byPlayerId };
+      nextEffects = [
+        ...withoutEffectsMatching(
+          activeEffects,
+          (e) => e.kind === "swapPending" && e.byPlayerId === byPlayerId
+        ),
+        effect,
+      ];
+      break;
+    }
+    case "blind": {
+      effect = { kind: "blind", onPlayerId: opponentId, turnsRemaining: BLIND_TURNS };
+      nextEffects = [
+        ...withoutEffectsMatching(
+          activeEffects,
+          (e) => e.kind === "blind" && e.onPlayerId === opponentId
+        ),
+        effect,
+      ];
+      break;
+    }
+    case "shrink": {
+      effect = { kind: "shrink", onPlayerId: opponentId, maxLength: SHRINK_MAX_LENGTH };
+      nextEffects = [
+        ...withoutEffectsMatching(
+          activeEffects,
+          (e) => e.kind === "shrink" && e.onPlayerId === opponentId
+        ),
+        effect,
+      ];
+      break;
+    }
+    case "rush": {
+      effect = { kind: "rush", onPlayerId: opponentId };
+      nextEffects = [
+        ...withoutEffectsMatching(
+          activeEffects,
+          (e) => e.kind === "rush" && e.onPlayerId === opponentId
+        ),
+        effect,
+      ];
+      break;
+    }
+    case "steal": {
+      // Steal consumes opponent's last word + transfers points. Chain mutation
+      // happens in GameRoom; no persistent active effect.
+      effect = undefined;
+      break;
+    }
+    case "peek": {
+      effect = { kind: "peek", forPlayerId: byPlayerId, turnsRemaining: PEEK_TURNS };
+      nextEffects = [
+        ...withoutEffectsMatching(
+          activeEffects,
+          (e) => e.kind === "peek" && e.forPlayerId === byPlayerId
+        ),
+        effect,
+      ];
+      break;
+    }
+    case "blitz": {
+      effect = { kind: "blitzClaimed", byPlayerId };
+      nextEffects = [
+        ...withoutEffectsMatching(
+          activeEffects,
+          (e) => e.kind === "blitzClaimed" && e.byPlayerId === byPlayerId
+        ),
+        effect,
+      ];
+      break;
+    }
+    case "wildfire": {
+      effect = {
+        kind: "wildfire",
+        turnsRemaining: WILDFIRE_TURNS,
+        multiplier: WILDFIRE_MULTIPLIER,
+      };
+      nextEffects = [
+        ...withoutEffectsMatching(activeEffects, (e) => e.kind === "wildfire"),
+        effect,
+      ];
       break;
     }
   }
@@ -191,7 +305,6 @@ export function activate(input: ActivateInput): ActivateResult {
   return { inventory: nextInventory, activeEffects: nextEffects, effect };
 }
 
-// Consumes a Second Life if armed for this player. Returns true if consumed.
 export function consumeSecondLifeOnTimeout(
   activeEffects: ActiveEffect[],
   playerId: PlayerId
@@ -205,8 +318,6 @@ export function consumeSecondLifeOnTimeout(
   return { consumed: true, activeEffects: next };
 }
 
-// Consumes the Letter Bomb constraint after the opponent's turn is decided
-// (whether they satisfied it or not — bomb lasts exactly one turn).
 export function consumeLetterBomb(
   activeEffects: ActiveEffect[],
   playerId: PlayerId
@@ -221,7 +332,63 @@ export function consumeLetterBomb(
   return { activeEffects: next, consumedRequiredLetter: effect.requiredLetter };
 }
 
-// Returns the active Letter Bomb requirement for a player, if any.
+export function consumeShrink(
+  activeEffects: ActiveEffect[],
+  playerId: PlayerId
+): { activeEffects: ActiveEffect[]; consumedMaxLength?: number } {
+  const idx = activeEffects.findIndex(
+    (e) => e.kind === "shrink" && e.onPlayerId === playerId
+  );
+  if (idx < 0) return { activeEffects };
+  const e = activeEffects[idx] as Extract<ActiveEffect, { kind: "shrink" }>;
+  const next = [...activeEffects];
+  next.splice(idx, 1);
+  return { activeEffects: next, consumedMaxLength: e.maxLength };
+}
+
+export function consumeRush(
+  activeEffects: ActiveEffect[],
+  playerId: PlayerId
+): { activeEffects: ActiveEffect[]; consumed: boolean } {
+  const idx = activeEffects.findIndex(
+    (e) => e.kind === "rush" && e.onPlayerId === playerId
+  );
+  if (idx < 0) return { activeEffects, consumed: false };
+  const next = [...activeEffects];
+  next.splice(idx, 1);
+  return { activeEffects: next, consumed: true };
+}
+
+export function decrementBlind(activeEffects: ActiveEffect[]): ActiveEffect[] {
+  return activeEffects
+    .map((e) =>
+      e.kind === "blind"
+        ? { ...e, turnsRemaining: e.turnsRemaining - 1 }
+        : e
+    )
+    .filter((e) => !(e.kind === "blind" && e.turnsRemaining <= 0));
+}
+
+export function decrementPeek(activeEffects: ActiveEffect[]): ActiveEffect[] {
+  return activeEffects
+    .map((e) =>
+      e.kind === "peek"
+        ? { ...e, turnsRemaining: e.turnsRemaining - 1 }
+        : e
+    )
+    .filter((e) => !(e.kind === "peek" && e.turnsRemaining <= 0));
+}
+
+export function decrementWildfire(activeEffects: ActiveEffect[]): ActiveEffect[] {
+  return activeEffects
+    .map((e) =>
+      e.kind === "wildfire"
+        ? { ...e, turnsRemaining: e.turnsRemaining - 1 }
+        : e
+    )
+    .filter((e) => !(e.kind === "wildfire" && e.turnsRemaining <= 0));
+}
+
 export function getLetterBombRequirement(
   activeEffects: ActiveEffect[],
   playerId: PlayerId
@@ -232,7 +399,64 @@ export function getLetterBombRequirement(
   return e?.kind === "letterBomb" ? e.requiredLetter : undefined;
 }
 
-// Returns the freeze-expiry timestamp for a player, if any.
+export function getShrinkMaxLength(
+  activeEffects: ActiveEffect[],
+  playerId: PlayerId
+): number | undefined {
+  const e = activeEffects.find(
+    (e) => e.kind === "shrink" && e.onPlayerId === playerId
+  );
+  return e?.kind === "shrink" ? e.maxLength : undefined;
+}
+
+export function isBlinded(activeEffects: ActiveEffect[], playerId: PlayerId): boolean {
+  return activeEffects.some(
+    (e) => e.kind === "blind" && e.onPlayerId === playerId && e.turnsRemaining > 0
+  );
+}
+
+export function isPeekActive(activeEffects: ActiveEffect[], playerId: PlayerId): boolean {
+  return activeEffects.some(
+    (e) => e.kind === "peek" && e.forPlayerId === playerId && e.turnsRemaining > 0
+  );
+}
+
+export function getWildfireMultiplier(activeEffects: ActiveEffect[]): number {
+  const e = activeEffects.find((e) => e.kind === "wildfire");
+  return e?.kind === "wildfire" && e.turnsRemaining > 0 ? e.multiplier : 1;
+}
+
+export function isBlitzClaimed(
+  activeEffects: ActiveEffect[],
+  playerId: PlayerId
+): boolean {
+  return activeEffects.some(
+    (e) => e.kind === "blitzClaimed" && e.byPlayerId === playerId
+  );
+}
+
+export function consumeBlitz(
+  activeEffects: ActiveEffect[],
+  playerId: PlayerId
+): ActiveEffect[] {
+  return activeEffects.filter(
+    (e) => !(e.kind === "blitzClaimed" && e.byPlayerId === playerId)
+  );
+}
+
+export function consumeSwapPending(
+  activeEffects: ActiveEffect[],
+  playerId: PlayerId
+): { activeEffects: ActiveEffect[]; wasPending: boolean } {
+  const idx = activeEffects.findIndex(
+    (e) => e.kind === "swapPending" && e.byPlayerId === playerId
+  );
+  if (idx < 0) return { activeEffects, wasPending: false };
+  const next = [...activeEffects];
+  next.splice(idx, 1);
+  return { activeEffects: next, wasPending: true };
+}
+
 export function getFreezeExpiresAt(
   activeEffects: ActiveEffect[],
   playerId: PlayerId
@@ -243,7 +467,6 @@ export function getFreezeExpiresAt(
   return e?.kind === "freeze" ? e.expiresAt : undefined;
 }
 
-// Drops expired effects.
 export function tickEffects(activeEffects: ActiveEffect[], now: number): ActiveEffect[] {
   return activeEffects.filter((e) => {
     if (e.kind === "freeze") return e.expiresAt > now;

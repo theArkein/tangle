@@ -33,6 +33,8 @@ Each feature is tagged `implement` or `skip`. Filter by tag to get the current b
 
 ## Phase 2 — Depth & Modes (Weeks 13–20)
 
+**Phase 2 shipped:** Speed Round mode (mode picker on lobby), 8 Tier 2 power-ups added to the registry, Wildfire scoring multiplier, chain-length disruption drop trigger (10+ words), word-effect animation on 8+ letter words. Power-ups remain registry-driven — each new power-up is a one-file change.
+
 | Feature | Status | Reason |
 |---------|--------|--------|
 | Speed Round (8s timer, no power-ups) | `implement` | Distinct high-intensity mode, pure skill |

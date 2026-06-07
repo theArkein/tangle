@@ -1,6 +1,7 @@
 import { calculate } from "./EloCalculator";
 import { calculateXP } from "./XPCalculator";
 import { titleForWins } from "./TitleEngine";
+import type { GameMode } from "./gameModes";
 import type { Env } from "../index";
 
 export interface WordEntry {
@@ -22,6 +23,7 @@ export interface PersistMatchInput {
   winnerId: string;
   roundWins: Record<string, number>;
   roundHistory: RoundHistoryEntry[];
+  gameMode?: GameMode;
 }
 
 const MAX_MATCHES_PER_PLAYER = 50;
@@ -29,15 +31,24 @@ const MAX_BATCH_SIZE = 100;
 
 export async function persistMatch(env: Env, input: PersistMatchInput): Promise<void> {
   const { player1Id, player2Id, winnerId, roundWins, roundHistory } = input;
+  const gameMode = input.gameMode ?? "classic";
   const loserId = winnerId === player1Id ? player2Id : player1Id;
   const matchId = crypto.randomUUID();
   const now = Date.now();
 
   // Insert match row
   await env.DB.prepare(
-    "INSERT INTO matches (id, player1_id, player2_id, winner_id, round_scores, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+    "INSERT INTO matches (id, player1_id, player2_id, winner_id, round_scores, created_at, game_mode) VALUES (?, ?, ?, ?, ?, ?, ?)"
   )
-    .bind(matchId, player1Id, player2Id, winnerId, JSON.stringify(roundWins), now)
+    .bind(
+      matchId,
+      player1Id,
+      player2Id,
+      winnerId,
+      JSON.stringify(roundWins),
+      now,
+      gameMode
+    )
     .run();
 
   // Insert match_words in batches

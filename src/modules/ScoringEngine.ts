@@ -7,9 +7,14 @@ export interface ScoreBreakdown {
 export interface ScoreResult {
   points: number;
   breakdown: ScoreBreakdown;
+  multiplier: number;
 }
 
-export function score(word: string): ScoreResult {
+export interface ScoreOptions {
+  multiplier?: number;
+}
+
+export function score(word: string, options: ScoreOptions = {}): ScoreResult {
   const base = word.length;
 
   const rareSet = new Set<string>();
@@ -22,10 +27,13 @@ export function score(word: string): ScoreResult {
 
   const longWord = word.length >= 8 ? 5 : 0;
 
-  const points = base + rareLetter + longWord;
+  const multiplier = options.multiplier ?? 1;
+  const subtotal = base + rareLetter + longWord;
+  const points = subtotal * multiplier;
 
   return {
     points,
     breakdown: { base, rareLetter, longWord },
+    multiplier,
   };
 }

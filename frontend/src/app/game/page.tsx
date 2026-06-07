@@ -15,13 +15,33 @@ interface BeforeInstallPromptEvent extends Event {
 
 // ── Backend types (mirrored from src/modules/MatchStateMachine.ts) ───────────
 
-type PowerUpId = 'freeze' | 'secondLife' | 'letterBomb' | 'block'
+type PowerUpId =
+  | 'freeze'
+  | 'secondLife'
+  | 'letterBomb'
+  | 'block'
+  | 'swap'
+  | 'blind'
+  | 'shrink'
+  | 'rush'
+  | 'steal'
+  | 'peek'
+  | 'blitz'
+  | 'wildfire'
 type PowerUpInventory = Record<PowerUpId, number>
+type GameMode = 'classic' | 'speed_round'
 
 type ActiveEffect =
   | { kind: 'freeze'; onPlayerId: string; expiresAt: number }
   | { kind: 'secondLifeArmed'; forPlayerId: string }
   | { kind: 'letterBomb'; onPlayerId: string; requiredLetter: string }
+  | { kind: 'swapPending'; byPlayerId: string }
+  | { kind: 'blind'; onPlayerId: string; turnsRemaining: number }
+  | { kind: 'shrink'; onPlayerId: string; maxLength: number }
+  | { kind: 'rush'; onPlayerId: string }
+  | { kind: 'peek'; forPlayerId: string; turnsRemaining: number }
+  | { kind: 'blitzClaimed'; byPlayerId: string }
+  | { kind: 'wildfire'; turnsRemaining: number; multiplier: number }
 
 interface DropTriggers {
   thresholdsCrossed: Record<string, number>
@@ -53,6 +73,7 @@ interface MatchState {
   player1Id: string
   player2Id: string
   roundWins: Record<string, number>
+  gameMode: GameMode
   currentRound?: RoundState
   roundEndContext?: RoundEndContext
   matchWinnerId?: string
@@ -73,24 +94,30 @@ interface RoundHistoryEntry {
 
 type ServerMsg =
   | { type: 'state_update'; state: MatchState; scores: Record<string, number>; roundHistory: RoundHistoryEntry[] }
-  | { type: 'waiting'; playerCount: number }
-  | { type: 'word_result'; valid: true; points: number; breakdown: { base: number; rareLetter: number; longWord: number } }
+  | { type: 'waiting'; playerCount: number; mode?: GameMode }
+  | { type: 'word_result'; valid: true; points: number; breakdown: { base: number; rareLetter: number; longWord: number }; multiplier?: number }
   | { type: 'word_result'; valid: false; reason: string }
   | { type: 'opponent_disconnected' }
   | { type: 'rematch_pending' }
   | { type: 'rematch_timeout' }
   | { type: 'power_up_earned'; playerId: string; powerup: PowerUpId; source: string }
-  | { type: 'power_up_activated'; powerup: PowerUpId; byPlayerId: string; targetPlayerId: string | null }
+  | { type: 'power_up_activated'; powerup: PowerUpId; byPlayerId: string; targetPlayerId: string | null; word?: string; points?: number }
   | { type: 'second_life_consumed'; playerId: string }
   | { type: 'reaction'; fromPlayerId: string; reaction: string }
+  | { type: 'swap_letter_chosen'; byPlayerId: string; letter: string }
+  | { type: 'typing_update'; fromPlayerId: string; partial: string }
   | { type: 'forfeit'; absentPlayerId: string }
   | { type: 'error'; message: string }
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const TURN_SECONDS = 60
-const MAX_FAULTS = 8
 const NEXT_ROUND_SECONDS = 30
+
+const MODE_CONFIG: Record<GameMode, { displayName: string; turnSeconds: number; maxFaults: number }> = {
+  classic: { displayName: 'Classic Duel', turnSeconds: 60, maxFaults: 8 },
+  speed_round: { displayName: 'Speed Round', turnSeconds: 8, maxFaults: 1 },
+}
+
 const REACTION_OPTIONS: Array<{ key: string; emoji: string }> = [
   { key: 'fire', emoji: '🔥' },
   { key: 'shocked', emoji: '😱' },
@@ -102,6 +129,14 @@ const POWER_UP_LABELS: Record<PowerUpId, { name: string; emoji: string }> = {
   secondLife: { name: '2nd Life', emoji: '💚' },
   letterBomb: { name: 'Letter Bomb', emoji: '💣' },
   block: { name: 'Block', emoji: '🛑' },
+  swap: { name: 'Swap', emoji: '🔀' },
+  blind: { name: 'Blind', emoji: '🙈' },
+  shrink: { name: 'Shrink', emoji: '🤏' },
+  rush: { name: 'Rush', emoji: '⚡' },
+  steal: { name: 'Steal', emoji: '🪝' },
+  peek: { name: 'Peek', emoji: '👁' },
+  blitz: { name: 'Blitz', emoji: '⚔️' },
+  wildfire: { name: 'Wildfire', emoji: '🔥' },
 }
 
 // ── Styles ───────────────────────────────────────────────────────────────────
@@ -131,7 +166,7 @@ function GameContent() {
   const [wordInput, setWordInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [feedback, setFeedback] = useState<{ text: string; ok: boolean } | null>(null)
-  const [timeLeft, setTimeLeft] = useState(TURN_SECONDS)
+  const [timeLeft, setTimeLeft] = useState(60)
   const [nextRoundTimeLeft, setNextRoundTimeLeft] = useState(NEXT_ROUND_SECONDS)
   const [roundHistory, setRoundHistory] = useState<RoundHistoryEntry[]>([])
   const [rematchState, setRematchState] = useState<'idle' | 'pending'>('idle')
@@ -141,6 +176,7 @@ function GameContent() {
   const [activatedFeed, setActivatedFeed] = useState<{ id: PowerUpId; byMe: boolean } | null>(null)
   const [reactionFeed, setReactionFeed] = useState<Array<{ id: number; emoji: string; byMe: boolean }>>([])
   const [forfeitedBy, setForfeitedBy] = useState<string | null>(null)
+  const [opponentTyping, setOpponentTyping] = useState<string>('')
 
   const wsRef = useRef<WebSocket | null>(null)
   const deferredInstallRef = useRef<BeforeInstallPromptEvent | null>(null)
@@ -246,6 +282,17 @@ function GameContent() {
         return
       }
 
+      if (msg.type === 'typing_update') {
+        setOpponentTyping(msg.partial)
+        return
+      }
+
+      if (msg.type === 'swap_letter_chosen') {
+        setActivatedFeed({ id: 'swap', byMe: msg.byPlayerId === myId })
+        setTimeout(() => setActivatedFeed(null), 2500)
+        return
+      }
+
       if (msg.type === 'state_update') {
         const { state } = msg
         const prev = prevStateRef.current
@@ -287,11 +334,13 @@ function GameContent() {
   // Visual countdown ticker — updates every 250 ms
   useEffect(() => {
     if (matchState?.status !== 'round_active') return
+    const mode = matchState.gameMode ?? 'classic'
+    const turnSecs = MODE_CONFIG[mode].turnSeconds
     const id = setInterval(() => {
-      setTimeLeft(Math.max(0, TURN_SECONDS - (Date.now() - turnStartAtRef.current) / 1000))
+      setTimeLeft(Math.max(0, turnSecs - (Date.now() - turnStartAtRef.current) / 1000))
     }, 250)
     return () => clearInterval(id)
-  }, [matchState?.status])
+  }, [matchState?.status, matchState?.gameMode])
 
   // Next-round countdown ticker
   useEffect(() => {
@@ -618,11 +667,21 @@ function GameContent() {
   const oppWins = matchState.roundWins[opponentId] ?? 0
   const myFaults = round.faults[myId] ?? 0
   const oppFaults = round.faults[opponentId] ?? 0
-  const myInventory: PowerUpInventory = round.powerUpInventory[myId] ?? { freeze: 0, secondLife: 0, letterBomb: 0, block: 0 }
+  const gameMode: GameMode = matchState.gameMode ?? 'classic'
+  const modeCfg = MODE_CONFIG[gameMode]
+  const emptyInv: PowerUpInventory = { freeze: 0, secondLife: 0, letterBomb: 0, block: 0, swap: 0, blind: 0, shrink: 0, rush: 0, steal: 0, peek: 0, blitz: 0, wildfire: 0 }
+  const myInventory: PowerUpInventory = round.powerUpInventory[myId] ?? emptyInv
   const totalMyPowerUps = (Object.values(myInventory) as number[]).reduce((sum: number, v) => sum + v, 0)
   const myLetterBomb = round.activeEffects.find(e => e.kind === 'letterBomb' && e.onPlayerId === myId)
   const opponentLetterBomb = round.activeEffects.find(e => e.kind === 'letterBomb' && e.onPlayerId === opponentId)
-  const timerPct = (timeLeft / TURN_SECONDS) * 100
+  const myShrink = round.activeEffects.find(e => e.kind === 'shrink' && e.onPlayerId === myId)
+  const myRush = round.activeEffects.find(e => e.kind === 'rush' && e.onPlayerId === myId)
+  const blindOnMe = round.activeEffects.find(e => e.kind === 'blind' && e.onPlayerId === myId)
+  const wildfire = round.activeEffects.find(e => e.kind === 'wildfire')
+  const swapPending = round.activeEffects.find(e => e.kind === 'swapPending' && e.byPlayerId === myId)
+  const myBlitzClaimed = round.activeEffects.find(e => e.kind === 'blitzClaimed' && e.byPlayerId === myId)
+  const peekActive = round.activeEffects.find(e => e.kind === 'peek' && e.forPlayerId === myId)
+  const timerPct = (timeLeft / modeCfg.turnSeconds) * 100
   const timerUrgent = timeLeft <= 5
   const lastWord = round.chain[round.chain.length - 1]
   const nextSeed = lastWord ? lastWord.slice(-1).toUpperCase() : round.seedLetter.toUpperCase()
@@ -665,7 +724,7 @@ function GameContent() {
           aria-label="Back to lobby"
         >←</button>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n900)' }}>Classic Duel</div>
+          <div style={{ fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n900)' }}>{modeCfg.displayName}</div>
           <div style={{ fontSize: '11px', color: 'var(--n400)', fontFamily: 'var(--font-mono)' }}>Round {round.roundNumber}</div>
         </div>
         <span style={S.scoreText}>{myWins} – {oppWins}</span>
@@ -678,7 +737,7 @@ function GameContent() {
           <div>
             <div style={{ fontSize: '12px', fontWeight: 500, fontFamily: 'var(--font-heading)', color: 'var(--n800)' }}>You</div>
             <div style={{ display: 'flex', gap: '2px', marginTop: '3px' }}>
-              {Array.from({ length: MAX_FAULTS }).map((_, i) => (
+              {Array.from({ length: modeCfg.maxFaults }).map((_, i) => (
                 <span key={i} style={{ display: 'block', width: '5px', height: '5px', borderRadius: '50%', background: i < myFaults ? 'var(--danger)' : 'var(--n200)' }} />
               ))}
             </div>
@@ -689,7 +748,7 @@ function GameContent() {
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '12px', fontWeight: 500, fontFamily: 'var(--font-heading)', color: 'var(--n800)' }}>Opponent</div>
             <div style={{ display: 'flex', gap: '2px', marginTop: '3px', justifyContent: 'flex-end' }}>
-              {Array.from({ length: MAX_FAULTS }).map((_, i) => (
+              {Array.from({ length: modeCfg.maxFaults }).map((_, i) => (
                 <span key={i} style={{ display: 'block', width: '5px', height: '5px', borderRadius: '50%', background: i < oppFaults ? 'var(--danger)' : 'var(--n200)' }} />
               ))}
             </div>
@@ -710,9 +769,77 @@ function GameContent() {
         </div>
       )}
 
+      {/* Shrink banner */}
+      {myShrink && myShrink.kind === 'shrink' && (
+        <div style={{ background: 'var(--accent-warm-faint)', borderBottom: '1px solid var(--accent-warm-light)', padding: '8px 14px', fontSize: '12px', color: 'var(--accent-warm-muted)', textAlign: 'center', flexShrink: 0 }}>
+          🤏 Shrink — your next word must be ≤ <strong>{myShrink.maxLength}</strong> letters
+        </div>
+      )}
+
+      {/* Rush banner */}
+      {myRush && myRush.kind === 'rush' && (
+        <div style={{ background: 'var(--accent-warm-faint)', borderBottom: '1px solid var(--accent-warm-light)', padding: '8px 14px', fontSize: '12px', color: 'var(--accent-warm-muted)', textAlign: 'center', flexShrink: 0 }}>
+          ⚡ Rush — your next turn is half-length
+        </div>
+      )}
+
+      {/* Wildfire banner */}
+      {wildfire && wildfire.kind === 'wildfire' && (
+        <div style={{ background: '#ffeb99', borderBottom: '1px solid #f5d76e', padding: '8px 14px', fontSize: '12px', color: '#7d5a00', textAlign: 'center', flexShrink: 0, fontWeight: 600 }}>
+          🔥 Wildfire — {wildfire.multiplier}× scoring · {wildfire.turnsRemaining} turn{wildfire.turnsRemaining === 1 ? '' : 's'} left
+        </div>
+      )}
+
+      {/* Blitz claimed indicator */}
+      {myBlitzClaimed && (
+        <div style={{ background: 'var(--accent-warm-faint)', borderBottom: '1px solid var(--accent-warm-light)', padding: '6px 14px', fontSize: '11px', color: 'var(--accent-warm-muted)', textAlign: 'center', flexShrink: 0 }}>
+          ⚔️ Blitz claimed — you'll get another turn after this word
+        </div>
+      )}
+
+      {/* Peek active */}
+      {peekActive && (
+        <div style={{ background: '#e8f5e9', borderBottom: '1px solid #c8e6c9', padding: '6px 14px', fontSize: '11px', color: '#2e7d32', textAlign: 'center', flexShrink: 0 }}>
+          👁 Peek — opponent typing: <strong style={{ fontFamily: 'var(--font-mono)' }}>{opponentTyping || '…'}</strong>
+        </div>
+      )}
+
+      {/* Swap letter picker */}
+      {swapPending && (
+        <div style={{ background: 'var(--n0)', borderBottom: '1px solid var(--n200)', padding: '10px 14px', flexShrink: 0 }}>
+          <div style={{ fontSize: '12px', color: 'var(--n700)', marginBottom: 6, fontWeight: 600 }}>
+            🔀 Swap — pick a new chain letter:
+          </div>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {'abcdefghijklmnopqrstuvwxyz'.split('').map(letter => (
+              <button
+                key={letter}
+                onClick={() => {
+                  if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(JSON.stringify({ type: 'swap_choose_letter', letter }))
+                  }
+                }}
+                style={{
+                  width: 26, height: 26, borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--n200)', background: 'var(--n0)',
+                  fontFamily: 'var(--font-mono)', fontSize: 12,
+                  cursor: 'pointer', textTransform: 'uppercase',
+                }}
+              >{letter}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Word chain */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 14px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignContent: 'center', justifyContent: 'center' }}>
-        {round.chain.length === 0 ? (
+        {blindOnMe && blindOnMe.kind === 'blind' ? (
+          <div style={{ textAlign: 'center', width: '100%', color: 'var(--n400)' }}>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>🙈</div>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Chain hidden by Blind</div>
+            <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)' }}>{blindOnMe.turnsRemaining} turn{blindOnMe.turnsRemaining === 1 ? '' : 's'} remaining</div>
+          </div>
+        ) : round.chain.length === 0 ? (
           <div style={{ textAlign: 'center', width: '100%' }}>
             <div style={{ ...S.sectionLabel, marginBottom: '10px' }}>Start with</div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: '56px', color: 'var(--n900)', letterSpacing: '-1px' }}>
@@ -724,22 +851,28 @@ function GameContent() {
             const isOwn = matchState.player1Id === myId
               ? i % 2 === 0
               : i % 2 !== 0
+            const isLong = word.length >= 8
             return (
-              <WordPill
+              <span
                 key={i}
-                word={word}
-                variant={isOwn ? 'player1' : 'player2'}
-                size="sm"
-              />
+                style={isLong ? { display: 'inline-flex', animation: 'wordShimmer 1.6s ease-out' } : undefined}
+              >
+                <WordPill
+                  word={word}
+                  variant={isOwn ? 'player1' : 'player2'}
+                  size="sm"
+                />
+              </span>
             )
           })
         )}
+        <style>{`@keyframes wordShimmer { 0% { filter: brightness(1.6) saturate(1.5); transform: scale(1.05); } 100% { filter: brightness(1) saturate(1); transform: scale(1); } }`}</style>
       </div>
 
       {/* Bottom panel */}
       <div style={S.bottomPanel}>
         {/* Power-up HUD */}
-        {totalMyPowerUps > 0 && (
+        {gameMode === 'classic' && totalMyPowerUps > 0 && (
           <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' }}>
             {(Object.entries(myInventory) as Array<[PowerUpId, number]>)
               .filter(([, count]) => count > 0)
@@ -829,7 +962,13 @@ function GameContent() {
           <input
             type="text"
             value={wordInput}
-            onChange={e => setWordInput(e.target.value)}
+            onChange={e => {
+              const v = e.target.value
+              setWordInput(v)
+              if (wsRef.current?.readyState === WebSocket.OPEN && isMyTurn) {
+                wsRef.current.send(JSON.stringify({ type: 'typing_update', partial: v }))
+              }
+            }}
             onKeyDown={e => { if (e.key === 'Enter') submitWord() }}
             disabled={!isMyTurn || submitting}
             placeholder={
