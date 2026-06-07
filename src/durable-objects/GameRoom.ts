@@ -12,10 +12,23 @@ import {
   type WordEntry,
   type RoundHistoryEntry,
 } from "../modules/MatchPersistence";
+import {
+  activate as activatePowerUp,
+  addToInventory,
+  consumeSecondLifeOnTimeout,
+  consumeLetterBomb,
+  evaluateDrops,
+  getLetterBombRequirement,
+} from "../modules/PowerUpEngine";
+import { FREEZE_DURATION_MS } from "../modules/powerups";
+import type { PowerUpId } from "../modules/powerups/types";
 
 const TURN_TIMEOUT_MS = 60_000;
 const REMATCH_TIMEOUT_MS = 30_000;
+const NEXT_ROUND_TIMEOUT_MS = 30_000;
 const SEED_LETTERS = "abcdefghijklmnoprstw";
+
+type AlarmKind = "turn" | "rematch" | "next_round";
 
 function randomSeedLetter(): string {
   return SEED_LETTERS[Math.floor(Math.random() * SEED_LETTERS.length)] ?? "a";
@@ -29,6 +42,10 @@ interface RoomStorage {
   roundHistory: RoundHistoryEntry[];
   currentRoundWords: WordEntry[];
   rematchRequests: string[];
+  alarmKind?: AlarmKind | undefined;
+  // Server-side per-player remaining-time tracking. Updated on each turn start
+  // and adjusted when Block or Freeze affects timer state.
+  turnStartAt?: number | undefined;
 }
 
 export class GameRoom implements DurableObject {
@@ -144,6 +161,7 @@ export class GameRoom implements DurableObject {
     });
 
     stored.matchState = result.state;
+    stored.scores = { [p1]: 0, [p2]: 0 };
     await this.saveRoom(stored);
     await this.applyEffects(result.effects, stored);
   }
@@ -155,25 +173,48 @@ export class GameRoom implements DurableObject {
     const playerId = this.state.getTags(ws)[0];
     if (!playerId) return;
 
-    let data: { type?: string; word?: string };
+    let data: Record<string, unknown>;
     try {
       const text =
         typeof message === "string"
           ? message
           : new TextDecoder().decode(message);
-      data = JSON.parse(text) as { type?: string; word?: string };
+      data = JSON.parse(text) as Record<string, unknown>;
     } catch {
       ws.send(JSON.stringify({ type: "error", message: "Invalid JSON" }));
       return;
     }
 
-    if (data.type === "submit_word" && typeof data.word === "string") {
-      await this.handleWordSubmission(ws, playerId, data.word.trim());
+    const type = typeof data.type === "string" ? data.type : "";
+
+    if (type === "submit_word" && typeof data.word === "string") {
+      await this.handleWordSubmission(ws, playerId, (data.word as string).trim());
       return;
     }
 
-    if (data.type === "rematch_request") {
+    if (type === "rematch_request") {
       await this.handleRematchRequest(ws, playerId);
+      return;
+    }
+
+    if (type === "next_round_request") {
+      await this.handleNextRoundRequest(playerId);
+      return;
+    }
+
+    if (type === "use_powerup" && typeof data.powerup === "string") {
+      await this.handleUsePowerUp(ws, playerId, data.powerup as PowerUpId);
+      return;
+    }
+
+    if (type === "send_reaction" && typeof data.reaction === "string") {
+      this.broadcastAll(
+        JSON.stringify({
+          type: "reaction",
+          fromPlayerId: playerId,
+          reaction: data.reaction,
+        })
+      );
       return;
     }
   }
@@ -194,7 +235,14 @@ export class GameRoom implements DurableObject {
     }
 
     const usedWords = new Set(round.chain);
-    const validation = await validate(word, round.seedLetter, usedWords, this.dictionary);
+    const requiredContainingLetter = getLetterBombRequirement(round.activeEffects, playerId);
+    const validation = await validate(
+      word,
+      round.seedLetter,
+      usedWords,
+      this.dictionary,
+      { requiredContainingLetter }
+    );
 
     if (!validation.valid) {
       ws.send(
@@ -229,16 +277,65 @@ export class GameRoom implements DurableObject {
       breakdown: scoreResult.breakdown,
     });
 
-    const result = transition(stored.matchState, { type: "wordSubmitted", playerId, word });
-    stored.matchState = result.state;
+    const prevRoundScore = round.playerRoundScores[playerId] ?? 0;
+    const newRoundScore = prevRoundScore + scoreResult.points;
+
+    // Evaluate power-up drops from this word.
+    const evalResult = evaluateDrops({
+      playerId,
+      prevRoundScore,
+      newRoundScore,
+      breakdown: scoreResult.breakdown,
+      triggers: round.dropTriggers,
+    });
+
+    // Letter Bomb on the player whose word we just validated is consumed.
+    const lbConsumption = consumeLetterBomb(round.activeEffects, playerId);
+
+    // Move state forward by the word, then patch in score + triggers + drops + effects.
+    const wordResult = transition(stored.matchState, {
+      type: "wordSubmitted",
+      playerId,
+      word,
+      points: scoreResult.points,
+    });
+    stored.matchState = wordResult.state;
 
     if (stored.matchState.currentRound) {
       stored.matchState.currentRound.seedLetter =
         word[word.length - 1] ?? round.seedLetter;
+      stored.matchState.currentRound.dropTriggers = evalResult.triggers;
+      stored.matchState.currentRound.activeEffects = lbConsumption.activeEffects;
+
+      // Append drops to the earning player's inventory.
+      for (const drop of evalResult.drops) {
+        const playerInv = stored.matchState.currentRound.powerUpInventory[drop.playerId];
+        if (playerInv) {
+          stored.matchState.currentRound.powerUpInventory[drop.playerId] = addToInventory(
+            playerInv,
+            drop.id
+          );
+        }
+      }
+    }
+
+    // Update lobby-visible per-player scores.
+    stored.scores[playerId] = (stored.scores[playerId] ?? 0) + scoreResult.points;
+
+    // Broadcast drops as discrete events so the UI can celebrate.
+    for (const drop of evalResult.drops) {
+      this.broadcastAll(
+        JSON.stringify({
+          type: "power_up_earned",
+          playerId: drop.playerId,
+          powerup: drop.id,
+          source: drop.source,
+        })
+      );
     }
 
     await this.saveRoom(stored);
-    await this.applyEffects(result.effects, stored);
+    await this.applyEffects(wordResult.effects, stored);
   }
 
   private async handleRematchRequest(ws: WebSocket, playerId: string): Promise<void> {
@@ -249,16 +346,122 @@ export class GameRoom implements DurableObject {
     stored.rematchRequests.push(playerId);
 
     if (stored.rematchRequests.length === 2) {
-      await this.state.storage.deleteAlarm();
+      await this.clearAlarm(stored);
       stored.rematchRequests = [];
       stored.roundHistory = [];
       stored.currentRoundWords = [];
       await this.startMatch(stored);
     } else {
-      await this.state.storage.setAlarm(Date.now() + REMATCH_TIMEOUT_MS);
+      await this.setAlarm(stored, "rematch", Date.now() + REMATCH_TIMEOUT_MS);
       await this.saveRoom(stored);
       ws.send(JSON.stringify({ type: "rematch_pending" }));
     }
+  }
+
+  private async handleNextRoundRequest(playerId: string): Promise<void> {
+    const stored = await this.loadRoom();
+    if (stored.matchState?.status !== "round_complete") return;
+
+    const result = transition(stored.matchState, {
+      type: "nextRoundRequested",
+      playerId,
+    });
+    stored.matchState = result.state;
+    await this.saveRoom(stored);
+    await this.applyEffects(result.effects, stored);
+  }
+
+  private async handleUsePowerUp(
+    ws: WebSocket,
+    playerId: string,
+    powerUpId: PowerUpId
+  ): Promise<void> {
+    const stored = await this.loadRoom();
+    if (!stored.matchState || stored.matchState.status !== "round_active") return;
+    const round = stored.matchState.currentRound;
+    if (!round) return;
+
+    const opponentId =
+      playerId === stored.matchState.player1Id
+        ? stored.matchState.player2Id
+        : stored.matchState.player1Id;
+
+    const inventory = round.powerUpInventory[playerId];
+    if (!inventory) {
+      ws.send(JSON.stringify({ type: "error", message: "No inventory" }));
+      return;
+    }
+
+    const result = activatePowerUp({
+      inventory,
+      activeEffects: round.activeEffects,
+      powerUpId,
+      byPlayerId: playerId,
+      opponentId,
+      now: Date.now(),
+    });
+
+    if (result.error) {
+      ws.send(JSON.stringify({ type: "error", message: result.error }));
+      return;
+    }
+
+    // Apply inventory + effects.
+    round.powerUpInventory[playerId] = result.inventory;
+    round.activeEffects = result.activeEffects;
+
+    // Block: also remove opponent's last word.
+    if (powerUpId === "block") {
+      const blockResult = transition(stored.matchState, {
+        type: "blockApplied",
+        byPlayerId: playerId,
+      });
+      stored.matchState = blockResult.state;
+      // Preserve the latest inventory/effects we just applied.
+      if (stored.matchState.currentRound) {
+        stored.matchState.currentRound.powerUpInventory = round.powerUpInventory;
+        stored.matchState.currentRound.activeEffects = round.activeEffects;
+      }
+
+      // Adjust the seed letter to the new chain tail.
+      const newChain = stored.matchState.currentRound?.chain ?? [];
+      const newLastWord = newChain[newChain.length - 1];
+      if (stored.matchState.currentRound) {
+        stored.matchState.currentRound.seedLetter = newLastWord
+          ? newLastWord[newLastWord.length - 1] ?? round.seedLetter
+          : round.seedLetter;
+      }
+
+      this.broadcastAll(
+        JSON.stringify({
+          type: "power_up_activated",
+          powerup: "block",
+          byPlayerId: playerId,
+          targetPlayerId: opponentId,
+        })
+      );
+
+      await this.saveRoom(stored);
+      await this.applyEffects(blockResult.effects, stored);
+      return;
+    }
+
+    this.broadcastAll(
+      JSON.stringify({
+        type: "power_up_activated",
+        powerup: powerUpId,
+        byPlayerId: playerId,
+        targetPlayerId:
+          result.effect && "onPlayerId" in result.effect
+            ? result.effect.onPlayerId
+            : null,
+        effect: result.effect ?? null,
+      })
+    );
+
+    await this.saveRoom(stored);
+    // Force a broadcast so both sides see updated inventory + active effects.
+    await this.applyEffects([{ type: "broadcastState" }], stored);
   }
 
   async webSocketClose(ws: WebSocket): Promise<void> {
@@ -283,10 +486,11 @@ export class GameRoom implements DurableObject {
 
   async alarm(): Promise<void> {
     const stored = await this.loadRoom();
+    const kind = stored.alarmKind;
+    stored.alarmKind = undefined;
 
-    // Rematch timeout — alarm fires 30s after one player requested rematch
-    if (stored.matchState?.status === "match_complete") {
-      if (stored.rematchRequests.length > 0) {
+    if (kind === "rematch") {
+      if (stored.matchState?.status === "match_complete" && stored.rematchRequests.length > 0) {
         this.broadcastToPlayer(
           stored.rematchRequests[0]!,
           JSON.stringify({ type: "rematch_timeout" })
@@ -297,6 +501,41 @@ export class GameRoom implements DurableObject {
       return;
     }
 
+    if (kind === "next_round") {
+      if (
+        stored.matchState?.status !== "round_complete" ||
+        !stored.matchState.roundEndContext
+      ) {
+        await this.saveRoom(stored);
+        return;
+      }
+      const ctx = stored.matchState.roundEndContext;
+      // Whichever player has NOT confirmed forfeits. If both confirmed we'd
+      // never get here (alarm would have been cleared).
+      const absentPlayerId =
+        stored.matchState.player1Id === ctx.nextRoundConfirmations[0]
+          ? stored.matchState.player2Id
+          : stored.matchState.player1Id;
+
+      const result = transition(stored.matchState, {
+        type: "nextRoundTimeout",
+        absentPlayerId,
+      });
+
+      const prevRoundNumber = stored.matchState.currentRound?.roundNumber ?? 0;
+      stored.matchState = result.state;
+      this.saveRoundHistoryIfEnded(stored, prevRoundNumber);
+
+      this.broadcastAll(
+        JSON.stringify({ type: "forfeit", absentPlayerId })
+      );
+
+      await this.saveRoom(stored);
+      await this.applyEffects(result.effects, stored);
+      return;
+    }
+
+    // Default — turn timeout.
     if (
       !stored.matchState ||
       stored.matchState.status !== "round_active" ||
@@ -304,8 +543,32 @@ export class GameRoom implements DurableObject {
     )
       return;
 
-    const prevRoundNumber = stored.matchState.currentRound.roundNumber;
-    const timedOutPlayerId = stored.matchState.currentRound.currentPlayerId;
+    const round = stored.matchState.currentRound;
+    const timedOutPlayerId = round.currentPlayerId;
+
+    // Check Second Life consumption first — if armed for this player, the
+    // round continues and faults are not incremented.
+    const slCheck = consumeSecondLifeOnTimeout(round.activeEffects, timedOutPlayerId);
+    if (slCheck.consumed) {
+      round.activeEffects = slCheck.activeEffects;
+      this.broadcastAll(
+        JSON.stringify({
+          type: "second_life_consumed",
+          playerId: timedOutPlayerId,
+        })
+      );
+      const result = transition(stored.matchState, {
+        type: "turnTimeout",
+        playerId: timedOutPlayerId,
+        secondLifeConsumed: true,
+      });
+      stored.matchState = result.state;
+      await this.saveRoom(stored);
+      await this.applyEffects(result.effects, stored);
+      return;
+    }
+
+    const prevRoundNumber = round.roundNumber;
     const result = transition(stored.matchState, {
       type: "turnTimeout",
       playerId: timedOutPlayerId,
@@ -325,15 +588,20 @@ export class GameRoom implements DurableObject {
     if (!newState) return;
 
     const matchComplete = newState.status === "match_complete";
+    const roundComplete = newState.status === "round_complete";
     const newRoundNumber = newState.currentRound?.roundNumber ?? prevRoundNumber;
-    if (!matchComplete && newRoundNumber <= prevRoundNumber) return;
+
+    // Round ended if: match completed, OR we entered round_complete, OR new round started.
+    const ended = matchComplete || roundComplete || newRoundNumber > prevRoundNumber;
+    if (!ended) return;
 
     let winnerId = "";
     if (matchComplete) {
       winnerId =
         newState.currentRound?.roundWinnerId ?? newState.matchWinnerId ?? "";
+    } else if (roundComplete) {
+      winnerId = newState.roundEndContext?.winnerId ?? "";
     } else {
-      // Winner of the ended round goes first in the new round
       winnerId = newState.currentRound?.currentPlayerId ?? "";
     }
 
@@ -361,11 +629,35 @@ export class GameRoom implements DurableObject {
             })
           );
           break;
-        case "startTimer":
-          await this.state.storage.setAlarm(Date.now() + TURN_TIMEOUT_MS);
+        case "startTimer": {
+          let timeoutMs = TURN_TIMEOUT_MS;
+          const round = stored.matchState?.currentRound;
+          if (round) {
+            const idx = round.activeEffects.findIndex(
+              (e) => e.kind === "freeze" && e.onPlayerId === round.currentPlayerId
+            );
+            if (idx >= 0) {
+              // Freeze: cuts FREEZE_DURATION_MS off the affected player's turn timer.
+              timeoutMs = Math.max(5_000, TURN_TIMEOUT_MS - FREEZE_DURATION_MS);
+              round.activeEffects = round.activeEffects.filter((_, i) => i !== idx);
+            }
+          }
+          await this.setAlarm(stored, "turn", Date.now() + timeoutMs);
+          stored.turnStartAt = Date.now();
           break;
+        }
         case "stopTimer":
-          await this.state.storage.deleteAlarm();
+          if (stored.alarmKind === "turn") {
+            await this.clearAlarm(stored);
+          }
+          break;
+        case "startNextRoundTimeout":
+          await this.setAlarm(stored, "next_round", Date.now() + NEXT_ROUND_TIMEOUT_MS);
+          break;
+        case "stopNextRoundTimeout":
+          if (stored.alarmKind === "next_round") {
+            await this.clearAlarm(stored);
+          }
           break;
         case "matchOver":
           await persistMatch(this.env, {
@@ -378,6 +670,18 @@ export class GameRoom implements DurableObject {
           break;
       }
     }
+  }
+
+  private async setAlarm(stored: RoomStorage, kind: AlarmKind, at: number): Promise<void> {
+    stored.alarmKind = kind;
+    await this.state.storage.setAlarm(at);
+    await this.saveRoom(stored);
+  }
+
+  private async clearAlarm(stored: RoomStorage): Promise<void> {
+    stored.alarmKind = undefined;
+    await this.state.storage.deleteAlarm();
+    await this.saveRoom(stored);
   }
 
   private broadcastAll(message: string): void {
@@ -431,3 +735,4 @@ export class GameRoom implements DurableObject {
     await this.state.storage.put("room", stored);
   }
 }
+

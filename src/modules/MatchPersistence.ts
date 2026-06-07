@@ -1,4 +1,6 @@
 import { calculate } from "./EloCalculator";
+import { calculateXP } from "./XPCalculator";
+import { titleForWins } from "./TitleEngine";
 import type { Env } from "../index";
 
 export interface WordEntry {
@@ -77,9 +79,27 @@ export async function persistMatch(env: Env, input: PersistMatchInput): Promise<
     loserRow?.elo ?? 1000
   );
 
+  const winnerXP = calculateXP({ isWinner: true }).total;
+  const loserXP = calculateXP({ isWinner: false }).total;
+
+  // Read current win count to compute the post-match title.
+  const winnerWinsRow = await env.DB.prepare(
+    "SELECT total_wins FROM players WHERE id = ?"
+  )
+    .bind(winnerId)
+    .first<{ total_wins: number }>();
+  const newWinnerTotalWins = (winnerWinsRow?.total_wins ?? 0) + 1;
+  const newWinnerTitle = titleForWins(newWinnerTotalWins);
+
   await env.DB.batch([
-    env.DB.prepare("UPDATE players SET elo = elo + ? WHERE id = ?").bind(winnerDelta, winnerId),
-    env.DB.prepare("UPDATE players SET elo = elo + ? WHERE id = ?").bind(loserDelta, loserId),
+    env.DB.prepare(
+      "UPDATE players SET elo = elo + ?, xp = xp + ?, total_wins = total_wins + 1, title = ? WHERE id = ?"
+    ).bind(winnerDelta, winnerXP, newWinnerTitle, winnerId),
+    env.DB.prepare("UPDATE players SET elo = elo + ?, xp = xp + ? WHERE id = ?").bind(
+      loserDelta,
+      loserXP,
+      loserId
+    ),
   ]);
 
   // Trim oldest matches if over cap (per player)

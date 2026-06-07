@@ -11,6 +11,11 @@ interface PlayerData {
   display_name: string
   elo: number
   google_linked: boolean
+  xp: number
+  total_wins: number
+  title: string
+  next_title: string | null
+  wins_to_next_title: number | null
 }
 
 interface MatchRecord {
@@ -19,6 +24,25 @@ interface MatchRecord {
   outcome: 'win' | 'loss'
   roundScores: [number, number]
   date: number
+}
+
+// Title thresholds — mirrored from src/modules/TitleEngine.ts
+const TITLE_THRESHOLDS: Record<string, number> = {
+  Apprentice: 0,
+  'Word Slinger': 10,
+  'Chain Forger': 50,
+  Wordsmith: 200,
+  'Chain Lord': 500,
+  Lexicon: 1000,
+}
+
+function titleProgressPercent(p: PlayerData): number {
+  if (!p.next_title) return 100
+  const currentThreshold = TITLE_THRESHOLDS[p.title] ?? 0
+  const nextThreshold = TITLE_THRESHOLDS[p.next_title] ?? p.total_wins + (p.wins_to_next_title ?? 1)
+  const span = Math.max(1, nextThreshold - currentThreshold)
+  const into = p.total_wins - currentThreshold
+  return Math.max(0, Math.min(100, (into / span) * 100))
 }
 
 export default function ProfilePage() {
@@ -155,21 +179,42 @@ export default function ProfilePage() {
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          <Badge variant="info">{player.title}</Badge>
           <Badge variant="neutral">
             <span style={{ fontFamily: 'var(--font-mono)' }}>ELO {player.elo}</span>
           </Badge>
           {player.google_linked && (
-            <Badge variant="info">Google linked</Badge>
+            <Badge variant="success">Google linked</Badge>
           )}
         </div>
+
+        {/* Title progress */}
+        {player.next_title && player.wins_to_next_title !== null && (
+          <div style={{ marginTop: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--n400)', marginBottom: '4px' }}>
+              <span>Progress to {player.next_title}</span>
+              <span style={{ fontFamily: 'var(--font-mono)' }}>{player.wins_to_next_title} wins to go</span>
+            </div>
+            <div style={{ height: '6px', background: 'var(--n100)', borderRadius: '3px', overflow: 'hidden' }}>
+              <div
+                style={{
+                  height: '100%',
+                  width: `${titleProgressPercent(player)}%`,
+                  background: 'var(--accent-warm-muted)',
+                  transition: 'width 0.3s ease',
+                }}
+              />
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Stat boxes */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '20px' }}>
         {[
-          { label: 'ELO', value: String(player.elo) },
-          { label: 'Matches', value: String(matches.length) },
+          { label: 'XP', value: String(player.xp) },
+          { label: 'Wins', value: String(player.total_wins) },
           { label: 'Win rate', value: matches.length > 0 ? `${winRate}%` : '—' },
         ].map(stat => (
           <Card key={stat.label} style={{ padding: '14px 10px', textAlign: 'center' }}>

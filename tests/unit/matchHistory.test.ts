@@ -10,7 +10,7 @@ const typedEnv = env as unknown as Env;
 
 beforeAll(async () => {
   await typedEnv.DB.exec(
-    "CREATE TABLE IF NOT EXISTS players (id TEXT PRIMARY KEY, display_name TEXT NOT NULL, elo INTEGER NOT NULL DEFAULT 1000, created_at INTEGER NOT NULL, linked_oauth_provider TEXT)"
+    "CREATE TABLE IF NOT EXISTS players (id TEXT PRIMARY KEY, display_name TEXT NOT NULL, elo INTEGER NOT NULL DEFAULT 1000, created_at INTEGER NOT NULL, linked_oauth_provider TEXT, xp INTEGER NOT NULL DEFAULT 0, total_wins INTEGER NOT NULL DEFAULT 0, title TEXT NOT NULL DEFAULT 'Apprentice')"
   );
   await typedEnv.DB.exec(
     "CREATE TABLE IF NOT EXISTS matches (id TEXT PRIMARY KEY, player1_id TEXT NOT NULL, player2_id TEXT NOT NULL, winner_id TEXT, round_scores TEXT NOT NULL, created_at INTEGER NOT NULL)"

@@ -55,6 +55,7 @@ describe("MatchStateMachine", () => {
         type: "wordSubmitted",
         playerId: P1,
         word: "apple",
+        points: 5,
       });
 
       expect(state1.currentRound!.chain).toEqual(["apple"]);
@@ -66,6 +67,7 @@ describe("MatchStateMachine", () => {
         type: "wordSubmitted",
         playerId: P2,
         word: "elephant",
+        points: 13,
       });
 
       expect(state2.currentRound!.chain).toEqual(["apple", "elephant"]);
@@ -100,28 +102,33 @@ describe("MatchStateMachine", () => {
       expect(state2.currentRound!.faults[P1]).toBe(2);
     });
 
-    it("ends the round on the third fault, with the other player winning", () => {
+    it("ends the round on the eighth fault, with the other player winning", () => {
       let state = activeState();
 
-      state = transition(state, { type: "invalidWord", playerId: P1 }).state;
-      state = transition(state, { type: "invalidWord", playerId: P1 }).state;
+      for (let i = 0; i < 7; i++) {
+        state = transition(state, { type: "invalidWord", playerId: P1 }).state;
+      }
       const { state: finalState, effects } = transition(state, {
         type: "invalidWord",
         playerId: P1,
       });
 
-      // Round ended — P2 wins this round; P1 had 3 faults but match not yet won
+      // Round ended — P2 wins this round; P1 had 8 faults but match not yet won
       expect(finalState.roundWins[P2]).toBe(1);
       expect(finalState.roundWins[P1]).toBe(0);
-      // A new round should be started (not match_complete after one round win)
-      expect(finalState.status).toBe("round_active");
-      expect(finalState.currentRound!.roundNumber).toBe(2);
+      // We transition into round_complete to await Play Again confirmation,
+      // not directly into the next round.
+      expect(finalState.status).toBe("round_complete");
+      expect(finalState.roundEndContext?.winnerId).toBe(P2);
+      expect(finalState.roundEndContext?.roundNumber).toBe(1);
       expect(effects).toContainEqual({ type: "broadcastState" });
+      expect(effects).toContainEqual({ type: "stopTimer" });
+      expect(effects).toContainEqual({ type: "startNextRoundTimeout" });
     });
   });
 
   describe("turnTimeout event", () => {
-    it("ends the round and awards the win to the other player", () => {
+    it("transitions to round_complete and awards the round to the other player", () => {
       const state0 = activeState();
 
       const { state, effects } = transition(state0, {
@@ -129,16 +136,63 @@ describe("MatchStateMachine", () => {
         playerId: P1,
       });
 
-      // P2 wins the round; not match_complete after one win
+      // P2 wins the round; we wait in round_complete for Play Again
       expect(state.roundWins[P2]).toBe(1);
       expect(state.roundWins[P1]).toBe(0);
-      expect(state.status).toBe("round_active");
-      expect(state.currentRound!.roundNumber).toBe(2);
-      // Winner (P2) goes first in the next round
-      expect(state.currentRound!.currentPlayerId).toBe(P2);
+      expect(state.status).toBe("round_complete");
+      expect(state.roundEndContext?.winnerId).toBe(P2);
       expect(effects).toContainEqual({ type: "broadcastState" });
       expect(effects).toContainEqual({ type: "stopTimer" });
+      expect(effects).toContainEqual({ type: "startNextRoundTimeout" });
+    });
+  });
+
+  describe("nextRoundRequested event", () => {
+    function intoRoundComplete(): MatchState {
+      // Get into round_complete after P2 wins round 1
+      return transition(activeState(), { type: "turnTimeout", playerId: P1 }).state;
+    }
+
+    it("waits in round_complete after only one player confirms", () => {
+      const state0 = intoRoundComplete();
+      const { state, effects } = transition(state0, {
+        type: "nextRoundRequested",
+        playerId: P1,
+      });
+      expect(state.status).toBe("round_complete");
+      expect(state.roundEndContext?.nextRoundConfirmations).toEqual([P1]);
+      expect(effects).toContainEqual({ type: "broadcastState" });
+    });
+
+    it("advances to the next round once both players have confirmed", () => {
+      let state = intoRoundComplete();
+      state = transition(state, { type: "nextRoundRequested", playerId: P1 }).state;
+      const { state: next, effects } = transition(state, {
+        type: "nextRoundRequested",
+        playerId: P2,
+      });
+      expect(next.status).toBe("round_active");
+      expect(next.currentRound?.roundNumber).toBe(2);
+      // Winner of the previous round (P2) goes first
+      expect(next.currentRound?.currentPlayerId).toBe(P2);
+      expect(next.roundEndContext).toBeUndefined();
+      expect(effects).toContainEqual({ type: "stopNextRoundTimeout" });
       expect(effects).toContainEqual({ type: "startTimer" });
+    });
+  });
+
+  describe("nextRoundTimeout event", () => {
+    it("transitions to match_complete with the present player winning by forfeit", () => {
+      let state = transition(activeState(), { type: "turnTimeout", playerId: P1 }).state;
+      // Only P2 confirmed; P1 is absent
+      state = transition(state, { type: "nextRoundRequested", playerId: P2 }).state;
+      const { state: final, effects } = transition(state, {
+        type: "nextRoundTimeout",
+        absentPlayerId: P1,
+      });
+      expect(final.status).toBe("match_complete");
+      expect(final.matchWinnerId).toBe(P2);
+      expect(effects).toContainEqual({ type: "matchOver", winnerId: P2 });
     });
   });
 
@@ -146,11 +200,13 @@ describe("MatchStateMachine", () => {
     function winRoundsForP2(count: number): MatchState {
       let state = activeState();
       for (let i = 0; i < count; i++) {
-        const result = transition(state, {
-          type: "turnTimeout",
-          playerId: P1, // P1 times out → P2 wins the round
-        });
-        state = result.state;
+        // P1 times out → into round_complete with P2 as round winner
+        state = transition(state, { type: "turnTimeout", playerId: P1 }).state;
+        // Both confirm Play Again to start the next round (no-ops if match_complete)
+        if (state.status === "round_complete") {
+          state = transition(state, { type: "nextRoundRequested", playerId: P1 }).state;
+          state = transition(state, { type: "nextRoundRequested", playerId: P2 }).state;
+        }
       }
       return state;
     }
@@ -176,8 +232,7 @@ describe("MatchStateMachine", () => {
       );
 
       expect(state.status).toBe("match_complete");
-      // No fresh round started — currentRound should not be a freshly reset one
-      // The currentRound (if present) retains the last round's roundWinnerId
+      // No fresh round started — currentRound retains the last round's roundWinnerId
       if (state.currentRound) {
         expect(state.currentRound.roundWinnerId).toBe(P2);
       }
