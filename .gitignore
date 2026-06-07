@@ -4,6 +4,7 @@ dist/
 *.env
 .env.*
 !.env.example
+.dev.vars
 
 # Frontend build
 frontend/node_modules/

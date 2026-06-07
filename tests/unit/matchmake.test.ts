@@ -10,6 +10,24 @@ async function makeSessionCookie(playerId: string): Promise<string> {
   return `session=${token}`;
 }
 
+async function post(playerId: string, mode: string = "classic") {
+  const cookie = await makeSessionCookie(playerId);
+  const res = await SELF.fetch("http://localhost/api/matchmake", {
+    method: "POST",
+    headers: { Cookie: cookie, "Content-Type": "application/json" },
+    body: JSON.stringify({ mode }),
+  });
+  return (await res.json()) as { status: string; token?: string; roomId?: string };
+}
+
+async function pollOnce(playerId: string, token: string) {
+  const cookie = await makeSessionCookie(playerId);
+  const res = await SELF.fetch(`http://localhost/api/matchmake/${token}`, {
+    headers: { Cookie: cookie },
+  });
+  return (await res.json()) as { status: string; roomId?: string };
+}
+
 describe("POST /api/matchmake", () => {
   it("returns 401 without a session cookie", async () => {
     const ctx = createExecutionContext();
@@ -19,69 +37,30 @@ describe("POST /api/matchmake", () => {
   });
 
   it("enqueues the first player and returns pending + token", async () => {
-    const ctx = createExecutionContext();
-    const cookie = await makeSessionCookie("player-a");
-    const res = await SELF.fetch("http://localhost/api/matchmake", {
-      method: "POST",
-      headers: { Cookie: cookie },
-    });
-    await waitOnExecutionContext(ctx);
-
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { status: string; token?: string };
+    const body = await post("player-a");
     expect(body.status).toBe("pending");
     expect(typeof body.token).toBe("string");
     expect((body.token ?? "").length).toBe(16);
   });
 
   it("pairs two different players and both receive the same room ID", async () => {
-    const ctx = createExecutionContext();
-    const cookieA = await makeSessionCookie("player-pair-a");
-    const cookieB = await makeSessionCookie("player-pair-b");
-
-    const resA = await SELF.fetch("http://localhost/api/matchmake", {
-      method: "POST",
-      headers: { Cookie: cookieA },
-    });
-    const bodyA = (await resA.json()) as { status: string; token: string };
+    const bodyA = await post("player-pair-a");
     expect(bodyA.status).toBe("pending");
 
-    const resB = await SELF.fetch("http://localhost/api/matchmake", {
-      method: "POST",
-      headers: { Cookie: cookieB },
-    });
-    const bodyB = (await resB.json()) as { status: string; roomId?: string };
+    const bodyB = await post("player-pair-b");
     expect(bodyB.status).toBe("matched");
     expect(typeof bodyB.roomId).toBe("string");
 
-    // First player's token now resolves to matched with the same room ID
-    const pollRes = await SELF.fetch(
-      `http://localhost/api/matchmake/${bodyA.token}`,
-      { headers: { Cookie: cookieA } }
-    );
-    await waitOnExecutionContext(ctx);
-    const pollBody = (await pollRes.json()) as { status: string; roomId?: string };
-    expect(pollBody.status).toBe("matched");
-    expect(pollBody.roomId).toBe(bodyB.roomId);
+    const pollA = await pollOnce("player-pair-a", bodyA.token!);
+    expect(pollA.status).toBe("matched");
+    expect(pollA.roomId).toBe(bodyB.roomId);
   });
 
   it("does not match a player with themselves", async () => {
-    const ctx = createExecutionContext();
-    const cookie = await makeSessionCookie("player-solo");
-
-    const res1 = await SELF.fetch("http://localhost/api/matchmake", {
-      method: "POST",
-      headers: { Cookie: cookie },
-    });
-    const body1 = (await res1.json()) as { status: string; token: string };
+    const body1 = await post("player-solo");
     expect(body1.status).toBe("pending");
 
-    const res2 = await SELF.fetch("http://localhost/api/matchmake", {
-      method: "POST",
-      headers: { Cookie: cookie },
-    });
-    await waitOnExecutionContext(ctx);
-    const body2 = (await res2.json()) as { status: string };
+    const body2 = await post("player-solo");
     expect(body2.status).toBe("pending");
   });
 });
@@ -95,36 +74,95 @@ describe("GET /api/matchmake/:token", () => {
   });
 
   it("returns timeout for unknown or expired token", async () => {
-    const ctx = createExecutionContext();
-    const cookie = await makeSessionCookie("player-x");
-    const res = await SELF.fetch(
-      "http://localhost/api/matchmake/nonexistenttoken1",
-      { headers: { Cookie: cookie } }
-    );
-    await waitOnExecutionContext(ctx);
-
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { status: string };
+    const body = await pollOnce("player-x", "nonexistenttoken1");
     expect(body.status).toBe("timeout");
   });
 
   it("returns waiting while no opponent has appeared", async () => {
-    const ctx = createExecutionContext();
-    const cookie = await makeSessionCookie("player-wait");
+    const enqueue = await post("player-wait");
+    const poll = await pollOnce("player-wait", enqueue.token!);
+    expect(poll.status).toBe("waiting");
+  });
+});
 
-    const enqueueRes = await SELF.fetch("http://localhost/api/matchmake", {
-      method: "POST",
-      headers: { Cookie: cookie },
-    });
-    const { token } = (await enqueueRes.json()) as { status: string; token: string };
+describe("Matchmaking under concurrency", () => {
+  // The Matchmaker DO serializes all matchmaking operations, so even with
+  // many players hitting Play at the same time, pairing is deterministic
+  // and no player is left in a stranded state.
 
-    const pollRes = await SELF.fetch(
-      `http://localhost/api/matchmake/${token}`,
-      { headers: { Cookie: cookie } }
-    );
-    await waitOnExecutionContext(ctx);
+  it("pairs N=6 players hitting Play concurrently into 3 distinct rooms", async () => {
+    const players = ["c6-1", "c6-2", "c6-3", "c6-4", "c6-5", "c6-6"];
+    const responses = await Promise.all(players.map((p) => post(p)));
 
-    const body = (await pollRes.json()) as { status: string };
-    expect(body.status).toBe("waiting");
+    const matchedDirect = responses.filter((r) => r.status === "matched");
+    const stillPending = responses.filter((r) => r.status === "pending");
+    // With serialized pairing, every pair is formed at POST time — 3 of the
+    // 6 POSTs return matched, the other 3 return pending. They poll and find
+    // their match record updated.
+    expect(matchedDirect).toHaveLength(3);
+    expect(stillPending).toHaveLength(3);
+
+    // Poll the pending ones — all should resolve to matched with the same
+    // roomId as their partner.
+    const allRooms = new Set(matchedDirect.map((r) => r.roomId));
+    for (let i = 0; i < responses.length; i++) {
+      if (responses[i]!.status === "pending") {
+        const poll = await pollOnce(players[i]!, responses[i]!.token!);
+        expect(poll.status).toBe("matched");
+        allRooms.add(poll.roomId);
+      }
+    }
+    expect(allRooms.size).toBe(3);
+  });
+
+  it("leaves exactly one player waiting on odd N=5", async () => {
+    const players = ["c5-1", "c5-2", "c5-3", "c5-4", "c5-5"];
+    const responses = await Promise.all(players.map((p) => post(p)));
+
+    const matched = responses.filter((r) => r.status === "matched");
+    const pending = responses.filter((r) => r.status === "pending");
+    expect(matched).toHaveLength(2);
+    expect(pending).toHaveLength(3);
+
+    // Poll all pending ones; exactly one should still be waiting (the
+    // odd-one-out queue head).
+    const pollResults: string[] = [];
+    for (let i = 0; i < responses.length; i++) {
+      if (responses[i]!.status === "pending") {
+        const poll = await pollOnce(players[i]!, responses[i]!.token!);
+        pollResults.push(poll.status);
+      }
+    }
+    const stillWaiting = pollResults.filter((s) => s === "waiting").length;
+    const finallyMatched = pollResults.filter((s) => s === "matched").length;
+    expect(stillWaiting).toBe(1);
+    expect(finallyMatched).toBe(2);
+  });
+
+  it("keeps Classic and Speed queues isolated — they never cross-match", async () => {
+    const classic = await post("isolated-classic", "classic");
+    const speed = await post("isolated-speed", "speed_round");
+    // Both pending, neither sees the other.
+    expect(classic.status).toBe("pending");
+    expect(speed.status).toBe("pending");
+    const pollA = await pollOnce("isolated-classic", classic.token!);
+    expect(pollA.status).toBe("waiting");
+  });
+
+  it("pairs N=10 concurrent players into 5 distinct rooms", async () => {
+    const players = Array.from({ length: 10 }, (_, i) => `c10-${i}`);
+    const responses = await Promise.all(players.map((p) => post(p)));
+
+    // Poll any still-pending players.
+    const rooms = new Set<string>();
+    for (let i = 0; i < responses.length; i++) {
+      let result = responses[i]!;
+      if (result.status === "pending") {
+        result = await pollOnce(players[i]!, result.token!);
+      }
+      expect(result.status).toBe("matched");
+      rooms.add(result.roomId!);
+    }
+    expect(rooms.size).toBe(5);
   });
 });
