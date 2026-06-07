@@ -15,6 +15,20 @@ interface BeforeInstallPromptEvent extends Event {
 
 // ── Backend types (mirrored from src/modules/MatchStateMachine.ts) ───────────
 
+type PowerUpId = 'freeze' | 'secondLife' | 'letterBomb' | 'block'
+type PowerUpInventory = Record<PowerUpId, number>
+
+type ActiveEffect =
+  | { kind: 'freeze'; onPlayerId: string; expiresAt: number }
+  | { kind: 'secondLifeArmed'; forPlayerId: string }
+  | { kind: 'letterBomb'; onPlayerId: string; requiredLetter: string }
+
+interface DropTriggers {
+  thresholdsCrossed: Record<string, number>
+  rareLetterDropped: Record<string, boolean>
+  longWordDropped: Record<string, boolean>
+}
+
 interface RoundState {
   roundNumber: number
   seedLetter: string
@@ -22,6 +36,16 @@ interface RoundState {
   currentPlayerId: string
   faults: Record<string, number>
   roundWinnerId?: string
+  playerRoundScores: Record<string, number>
+  powerUpInventory: Record<string, PowerUpInventory>
+  activeEffects: ActiveEffect[]
+  dropTriggers: DropTriggers
+}
+
+interface RoundEndContext {
+  roundNumber: number
+  winnerId: string
+  nextRoundConfirmations: string[]
 }
 
 interface MatchState {
@@ -30,6 +54,7 @@ interface MatchState {
   player2Id: string
   roundWins: Record<string, number>
   currentRound?: RoundState
+  roundEndContext?: RoundEndContext
   matchWinnerId?: string
 }
 
@@ -54,13 +79,30 @@ type ServerMsg =
   | { type: 'opponent_disconnected' }
   | { type: 'rematch_pending' }
   | { type: 'rematch_timeout' }
+  | { type: 'power_up_earned'; playerId: string; powerup: PowerUpId; source: string }
+  | { type: 'power_up_activated'; powerup: PowerUpId; byPlayerId: string; targetPlayerId: string | null }
+  | { type: 'second_life_consumed'; playerId: string }
+  | { type: 'reaction'; fromPlayerId: string; reaction: string }
+  | { type: 'forfeit'; absentPlayerId: string }
   | { type: 'error'; message: string }
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const TURN_SECONDS = 60
-const MAX_FAULTS = 3
-const ROUND_END_MS = 2500
+const MAX_FAULTS = 8
+const NEXT_ROUND_SECONDS = 30
+const REACTION_OPTIONS: Array<{ key: string; emoji: string }> = [
+  { key: 'fire', emoji: '🔥' },
+  { key: 'shocked', emoji: '😱' },
+  { key: 'clap', emoji: '👏' },
+  { key: 'skull', emoji: '💀' },
+]
+const POWER_UP_LABELS: Record<PowerUpId, { name: string; emoji: string }> = {
+  freeze: { name: 'Freeze', emoji: '❄️' },
+  secondLife: { name: '2nd Life', emoji: '💚' },
+  letterBomb: { name: 'Letter Bomb', emoji: '💣' },
+  block: { name: 'Block', emoji: '🛑' },
+}
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
@@ -90,17 +132,23 @@ function GameContent() {
   const [submitting, setSubmitting] = useState(false)
   const [feedback, setFeedback] = useState<{ text: string; ok: boolean } | null>(null)
   const [timeLeft, setTimeLeft] = useState(TURN_SECONDS)
-  const [roundEnd, setRoundEnd] = useState<{ roundNumber: number; winnerId: string } | null>(null)
+  const [nextRoundTimeLeft, setNextRoundTimeLeft] = useState(NEXT_ROUND_SECONDS)
   const [roundHistory, setRoundHistory] = useState<RoundHistoryEntry[]>([])
   const [rematchState, setRematchState] = useState<'idle' | 'pending'>('idle')
   const [showLinkPrompt, setShowLinkPrompt] = useState(false)
   const [showInstallPrompt, setShowInstallPrompt] = useState(false)
+  const [powerUpToast, setPowerUpToast] = useState<{ id: PowerUpId; source: string } | null>(null)
+  const [activatedFeed, setActivatedFeed] = useState<{ id: PowerUpId; byMe: boolean } | null>(null)
+  const [reactionFeed, setReactionFeed] = useState<Array<{ id: number; emoji: string; byMe: boolean }>>([])
+  const [forfeitedBy, setForfeitedBy] = useState<string | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const deferredInstallRef = useRef<BeforeInstallPromptEvent | null>(null)
   const prevStateRef = useRef<MatchState | null>(null)
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const turnStartAtRef = useRef(0)
+  const nextRoundStartedAtRef = useRef(0)
+  const reactionIdRef = useRef(0)
 
   // Load current player ID
   useEffect(() => {
@@ -161,6 +209,43 @@ function GameContent() {
         return
       }
 
+      if (msg.type === 'power_up_earned') {
+        // Toast only for the player who earned it
+        if (msg.playerId === myId) {
+          setPowerUpToast({ id: msg.powerup, source: msg.source })
+          setTimeout(() => setPowerUpToast(null), 2500)
+        }
+        return
+      }
+
+      if (msg.type === 'power_up_activated') {
+        setActivatedFeed({ id: msg.powerup, byMe: msg.byPlayerId === myId })
+        setTimeout(() => setActivatedFeed(null), 2500)
+        return
+      }
+
+      if (msg.type === 'second_life_consumed') {
+        setActivatedFeed({ id: 'secondLife', byMe: msg.playerId === myId })
+        setTimeout(() => setActivatedFeed(null), 2500)
+        return
+      }
+
+      if (msg.type === 'reaction') {
+        const found = REACTION_OPTIONS.find(r => r.key === msg.reaction)
+        const emoji = found?.emoji ?? '👍'
+        const id = ++reactionIdRef.current
+        setReactionFeed(prev => [...prev, { id, emoji, byMe: msg.fromPlayerId === myId }])
+        setTimeout(() => {
+          setReactionFeed(prev => prev.filter(r => r.id !== id))
+        }, 3000)
+        return
+      }
+
+      if (msg.type === 'forfeit') {
+        setForfeitedBy(msg.absentPlayerId)
+        return
+      }
+
       if (msg.type === 'state_update') {
         const { state } = msg
         const prev = prevStateRef.current
@@ -171,21 +256,9 @@ function GameContent() {
           setRematchState('idle')
         }
 
-        if (
-          state.status !== 'match_complete' &&
-          prevRound &&
-          newRound &&
-          newRound.roundNumber > prevRound.roundNumber
-        ) {
-          let winnerId = ''
-          for (const [pid, wins] of Object.entries(state.roundWins)) {
-            if ((wins ?? 0) > (prev?.roundWins[pid] ?? 0)) {
-              winnerId = pid
-              break
-            }
-          }
-          setRoundEnd({ roundNumber: prevRound.roundNumber, winnerId })
-          setTimeout(() => setRoundEnd(null), ROUND_END_MS)
+        if (state.status === 'round_complete' && prev?.status !== 'round_complete') {
+          nextRoundStartedAtRef.current = Date.now()
+          setNextRoundTimeLeft(NEXT_ROUND_SECONDS)
         }
 
         if (newRound) {
@@ -220,6 +293,15 @@ function GameContent() {
     return () => clearInterval(id)
   }, [matchState?.status])
 
+  // Next-round countdown ticker
+  useEffect(() => {
+    if (matchState?.status !== 'round_complete') return
+    const id = setInterval(() => {
+      setNextRoundTimeLeft(Math.max(0, NEXT_ROUND_SECONDS - (Date.now() - nextRoundStartedAtRef.current) / 1000))
+    }, 250)
+    return () => clearInterval(id)
+  }, [matchState?.status])
+
   const submitWord = useCallback(() => {
     const word = wordInput.trim().toLowerCase()
     if (!word || submitting || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
@@ -227,6 +309,21 @@ function GameContent() {
     setSubmitting(true)
     setFeedback(null)
   }, [wordInput, submitting])
+
+  const sendNextRoundRequest = useCallback(() => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    wsRef.current.send(JSON.stringify({ type: 'next_round_request' }))
+  }, [])
+
+  const usePowerUp = useCallback((id: PowerUpId) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    wsRef.current.send(JSON.stringify({ type: 'use_powerup', powerup: id }))
+  }, [])
+
+  const sendReaction = useCallback((reaction: string) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    wsRef.current.send(JSON.stringify({ type: 'send_reaction', reaction }))
+  }, [])
 
   // Show Google link prompt once after first match win
   useEffect(() => {
@@ -311,6 +408,23 @@ function GameContent() {
       <div style={{ ...S.centeredFull }}>
         <div style={{ width: 28, height: 28, border: '3px solid var(--n200)', borderTopColor: 'var(--n900)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    )
+  }
+
+  // ── Forfeit notice (lives only briefly before match_complete arrives) ────
+
+  if (forfeitedBy && matchState.status !== 'match_complete') {
+    const youForfeited = forfeitedBy === myId
+    return (
+      <div style={S.centeredFull}>
+        <div style={{ fontSize: '32px' }}>{youForfeited ? '⏱' : '🏆'}</div>
+        <p style={{ fontSize: '18px', fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n900)' }}>
+          {youForfeited ? 'You forfeited the match' : 'Opponent forfeited — you win!'}
+        </p>
+        <p style={{ fontSize: '13px', color: 'var(--n400)' }}>
+          {youForfeited ? "You didn't confirm Play Again in time" : 'They did not confirm Play Again in time'}
+        </p>
       </div>
     )
   }
@@ -446,6 +560,46 @@ function GameContent() {
     )
   }
 
+  // ── Round complete — Play Again gate ─────────────────────────────────────
+
+  if (matchState.status === 'round_complete') {
+    const ctx = matchState.roundEndContext
+    const opponentId = matchState.player1Id === myId ? matchState.player2Id : matchState.player1Id
+    const myWins = matchState.roundWins[myId] ?? 0
+    const oppWins = matchState.roundWins[opponentId] ?? 0
+    const iWonRound = ctx?.winnerId === myId
+    const iConfirmed = ctx?.nextRoundConfirmations.includes(myId) ?? false
+    const opponentConfirmed = ctx?.nextRoundConfirmations.includes(opponentId) ?? false
+
+    return (
+      <div style={{ ...S.page, justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
+        <div style={{ width: '100%', maxWidth: 420, background: 'var(--n0)', border: '1px solid var(--n200)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.08)' }}>
+          <div style={{ fontSize: '32px', marginBottom: '8px' }}>{iWonRound ? '🎉' : '😤'}</div>
+          <p style={{ fontSize: '12px', fontWeight: 500, color: 'var(--n400)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
+            Round {ctx?.roundNumber ?? '?'} complete
+          </p>
+          <p style={{ fontFamily: 'var(--font-display)', fontSize: '22px', color: 'var(--n900)', marginBottom: '4px' }}>
+            {iWonRound ? 'You won the round!' : 'Opponent won the round'}
+          </p>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: '14px', color: 'var(--n500)', marginBottom: '20px' }}>
+            {myWins} – {oppWins}
+          </p>
+
+          <Button variant="primary" size="lg" full onClick={sendNextRoundRequest} disabled={iConfirmed}>
+            {iConfirmed ? 'Ready ✓' : 'Play Again'}
+          </Button>
+
+          <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--n500)' }}>
+            {opponentConfirmed ? 'Opponent is ready' : 'Waiting on opponent…'}
+            <span style={{ marginLeft: '8px', fontFamily: 'var(--font-mono)', color: nextRoundTimeLeft <= 5 ? 'var(--danger)' : 'var(--n400)' }}>
+              {Math.ceil(nextRoundTimeLeft)}s
+            </span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // ── Round active ─────────────────────────────────────────────────────────
 
   const round = matchState.currentRound
@@ -463,6 +617,11 @@ function GameContent() {
   const myWins = matchState.roundWins[myId] ?? 0
   const oppWins = matchState.roundWins[opponentId] ?? 0
   const myFaults = round.faults[myId] ?? 0
+  const oppFaults = round.faults[opponentId] ?? 0
+  const myInventory: PowerUpInventory = round.powerUpInventory[myId] ?? { freeze: 0, secondLife: 0, letterBomb: 0, block: 0 }
+  const totalMyPowerUps = (Object.values(myInventory) as number[]).reduce((sum: number, v) => sum + v, 0)
+  const myLetterBomb = round.activeEffects.find(e => e.kind === 'letterBomb' && e.onPlayerId === myId)
+  const opponentLetterBomb = round.activeEffects.find(e => e.kind === 'letterBomb' && e.onPlayerId === opponentId)
   const timerPct = (timeLeft / TURN_SECONDS) * 100
   const timerUrgent = timeLeft <= 5
   const lastWord = round.chain[round.chain.length - 1]
@@ -470,17 +629,31 @@ function GameContent() {
 
   return (
     <div style={S.page}>
-      {/* Round-end overlay */}
-      {roundEnd && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(250,250,249,0.85)', backdropFilter: 'blur(4px)' }}>
-          <div style={{ border: '1px solid var(--n200)', borderRadius: 'var(--radius-xl)', background: 'var(--n0)', padding: '32px 44px', textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.08)' }}>
-            <p style={{ fontSize: '12px', fontWeight: 500, color: 'var(--n400)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
-              Round {roundEnd.roundNumber} complete
-            </p>
-            <p style={{ fontFamily: 'var(--font-display)', fontSize: '22px', color: 'var(--n900)' }}>
-              {roundEnd.winnerId === myId ? 'You won this round!' : 'Opponent won this round'}
-            </p>
-          </div>
+      {/* Power-up earned toast */}
+      {powerUpToast && (
+        <div style={{ position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 60, background: 'var(--n900)', color: 'var(--n0)', padding: '10px 14px', borderRadius: 'var(--radius-md)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
+          <span style={{ fontSize: '18px' }}>{POWER_UP_LABELS[powerUpToast.id].emoji}</span>
+          <span>Earned {POWER_UP_LABELS[powerUpToast.id].name}</span>
+        </div>
+      )}
+
+      {/* Power-up activated banner */}
+      {activatedFeed && (
+        <div style={{ position: 'fixed', top: 56, left: '50%', transform: 'translateX(-50%)', zIndex: 55, background: 'var(--accent-warm-muted)', color: 'var(--n0)', padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span>{POWER_UP_LABELS[activatedFeed.id].emoji}</span>
+          <span>{activatedFeed.byMe ? 'You used' : 'Opponent used'} {POWER_UP_LABELS[activatedFeed.id].name}</span>
+        </div>
+      )}
+
+      {/* Live reactions */}
+      {reactionFeed.length > 0 && (
+        <div style={{ position: 'fixed', bottom: 220, left: 0, right: 0, zIndex: 50, display: 'flex', justifyContent: 'center', gap: '8px', pointerEvents: 'none' }}>
+          {reactionFeed.map(r => (
+            <div key={r.id} style={{ fontSize: '28px', animation: 'reactionFloat 3s ease-out forwards' }}>
+              {r.emoji}
+            </div>
+          ))}
+          <style>{`@keyframes reactionFloat { 0% { opacity: 0; transform: translateY(20px); } 20% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-40px); } }`}</style>
         </div>
       )}
 
@@ -504,9 +677,9 @@ function GameContent() {
           <Avatar name="You" variant="p1" size={28} />
           <div>
             <div style={{ fontSize: '12px', fontWeight: 500, fontFamily: 'var(--font-heading)', color: 'var(--n800)' }}>You</div>
-            <div style={{ display: 'flex', gap: '3px', marginTop: '2px' }}>
+            <div style={{ display: 'flex', gap: '2px', marginTop: '3px' }}>
               {Array.from({ length: MAX_FAULTS }).map((_, i) => (
-                <span key={i} style={{ display: 'block', width: '6px', height: '6px', borderRadius: '50%', background: i < myFaults ? 'var(--danger)' : 'var(--n200)' }} />
+                <span key={i} style={{ display: 'block', width: '5px', height: '5px', borderRadius: '50%', background: i < myFaults ? 'var(--danger)' : 'var(--n200)' }} />
               ))}
             </div>
           </div>
@@ -515,10 +688,27 @@ function GameContent() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, justifyContent: 'flex-end' }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '12px', fontWeight: 500, fontFamily: 'var(--font-heading)', color: 'var(--n800)' }}>Opponent</div>
+            <div style={{ display: 'flex', gap: '2px', marginTop: '3px', justifyContent: 'flex-end' }}>
+              {Array.from({ length: MAX_FAULTS }).map((_, i) => (
+                <span key={i} style={{ display: 'block', width: '5px', height: '5px', borderRadius: '50%', background: i < oppFaults ? 'var(--danger)' : 'var(--n200)' }} />
+              ))}
+            </div>
           </div>
           <Avatar name="?" variant="p2" size={28} />
         </div>
       </div>
+
+      {/* Letter Bomb active banner */}
+      {myLetterBomb && myLetterBomb.kind === 'letterBomb' && (
+        <div style={{ background: 'var(--accent-warm-faint)', borderBottom: '1px solid var(--accent-warm-light)', padding: '8px 14px', fontSize: '12px', color: 'var(--accent-warm-muted)', textAlign: 'center', flexShrink: 0 }}>
+          💣 Letter Bomb active — your next word must contain <strong>{myLetterBomb.requiredLetter}</strong>
+        </div>
+      )}
+      {opponentLetterBomb && opponentLetterBomb.kind === 'letterBomb' && (
+        <div style={{ background: 'var(--n50)', borderBottom: '1px solid var(--n100)', padding: '6px 14px', fontSize: '11px', color: 'var(--n500)', textAlign: 'center', flexShrink: 0 }}>
+          Opponent must use <strong>{opponentLetterBomb.requiredLetter}</strong>
+        </div>
+      )}
 
       {/* Word chain */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 14px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignContent: 'center', justifyContent: 'center' }}>
@@ -548,6 +738,64 @@ function GameContent() {
 
       {/* Bottom panel */}
       <div style={S.bottomPanel}>
+        {/* Power-up HUD */}
+        {totalMyPowerUps > 0 && (
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' }}>
+            {(Object.entries(myInventory) as Array<[PowerUpId, number]>)
+              .filter(([, count]) => count > 0)
+              .map(([id, count]) => (
+                <button
+                  key={id}
+                  onClick={() => usePowerUp(id)}
+                  disabled={!isMyTurn && id !== 'secondLife' && id !== 'block'}
+                  style={{
+                    background: 'var(--n0)',
+                    border: '1px solid var(--n200)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '6px 10px',
+                    fontSize: '12px',
+                    fontFamily: 'var(--font-heading)',
+                    color: 'var(--n800)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    opacity: (!isMyTurn && id !== 'secondLife' && id !== 'block') ? 0.45 : 1,
+                  }}
+                  title={POWER_UP_LABELS[id].name}
+                >
+                  <span>{POWER_UP_LABELS[id].emoji}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--n500)' }}>
+                    ×{count}
+                  </span>
+                </button>
+              ))}
+          </div>
+        )}
+
+        {/* Reaction bar */}
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', justifyContent: 'center' }}>
+          {REACTION_OPTIONS.map(r => (
+            <button
+              key={r.key}
+              onClick={() => sendReaction(r.key)}
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--n200)',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                fontSize: '16px',
+                cursor: 'pointer',
+                lineHeight: 1,
+              }}
+              aria-label={`React ${r.key}`}
+            >
+              {r.emoji}
+            </button>
+          ))}
+        </div>
+
         {/* Timer */}
         <div style={{ marginBottom: '10px' }}>
           <TimerBar

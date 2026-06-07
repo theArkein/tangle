@@ -30,7 +30,8 @@ The product is 100% free to host and operate using Cloudflare's free tier (Worke
 - **Turn timer:** 15 seconds per turn in Classic mode. Timer accelerates as the chain grows.
 - **Valid words:** English dictionary only (SOWPODS, ~270K words). No proper nouns, no abbreviations, no repeats within a match. Validated locally at the edge via Cloudflare D1 — zero API calls.
 - **Match structure:** Best of 5 rounds. Each round starts with a new random seed letter. Win 3 rounds to win the match.
-- **Round loss:** A player loses the round by timing out or playing an invalid word 3 times.
+- **Round loss:** A player loses the round by timing out or playing an invalid word 8 times.
+- **Between rounds:** Rounds do not auto-advance. After a round ends, both players see the result and must click "Play Again" to start the next round. If a player does not confirm within 30 seconds, they forfeit the match.
 
 ### 2.2 Scoring system
 
@@ -54,12 +55,19 @@ Power-ups are earned through gameplay, never purchased. This is a core design pr
 
 ### 3.1 Earning power-ups
 
-| Trigger | Reward | Rarity |
-|---------|--------|--------|
-| Win a round | 1 random common power-up | Common |
-| Play a 10+ word chain | 1 random earned power-up | Earned |
-| 3-match win streak | 1 random rare power-up | Rare |
-| Reach Danger Zone | Guaranteed rare drop | Rare |
+Power-ups are earned **within a round** through play. Inventory is per-player and **resets at the start of every round** — each round is a fresh tactical canvas.
+
+Each earning trigger maps to a **specific power-up category**. Players see clear cause-and-effect: defensive play styles earn defensive tools, vocabulary risk earns offensive disruption, etc. Within a category, selection is rarity-weighted (common 60% / uncommon 30% / rare 10%).
+
+| Trigger | Pool drawn from | Frequency |
+|---------|-----------------|-----------|
+| Cross a score threshold within the round | Defensive (Freeze, Second Life…) | Every 15 points of round score |
+| First rare-letter word in the round (Q/X/Z/J) | Offensive (Letter Bomb, Block…) | Once per round per player |
+| First 8+ letter word in the round | Offensive (Letter Bomb, Block…) | Once per round per player |
+| 10+ word chain in the round *(Phase 2)* | Disruption (Blind, Steal, Blitz…) | Once per round per player |
+| Reach Danger Zone *(later)* | Chaos (Wildfire…) | Once per Danger Zone entry |
+
+A single high-scoring word that crosses multiple thresholds at once awards multiple drops. The system is built around a **declarative power-up registry** — adding a new power-up is a one-file change with no engine modifications.
 
 ### 3.2 Complete power-up catalog
 

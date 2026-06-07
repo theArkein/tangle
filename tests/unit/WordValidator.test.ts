@@ -48,4 +48,20 @@ describe("WordValidator.validate", () => {
     const result = await validate("Tiger", "t", new Set(["tiger"]), dict);
     expect(result).toEqual({ valid: false, reason: "duplicate" });
   });
+
+  it("accepts a word containing the Letter Bomb required letter", async () => {
+    const dict = new MemoryDictionary(["quiz"]);
+    const result = await validate("quiz", "q", new Set(), dict, {
+      requiredContainingLetter: "Q",
+    });
+    expect(result).toEqual({ valid: true });
+  });
+
+  it("rejects a word missing the Letter Bomb required letter", async () => {
+    const dict = new MemoryDictionary(["apple"]);
+    const result = await validate("apple", "a", new Set(), dict, {
+      requiredContainingLetter: "Q",
+    });
+    expect(result).toEqual({ valid: false, reason: "missing_required_letter" });
+  });
 });
