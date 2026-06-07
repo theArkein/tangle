@@ -1,4 +1,5 @@
 export { GameRoom } from "./durable-objects/GameRoom";
+export { Matchmaker } from "./durable-objects/Matchmaker";
 import { handleMe, handleUpdateMe } from "./routes/auth";
 import { handleMatchmake } from "./routes/matchmake";
 import { handleMatches } from "./routes/matches";
@@ -7,6 +8,7 @@ import { authenticate } from "./auth/middleware";
 
 export interface Env {
   GAME_ROOM: DurableObjectNamespace;
+  MATCHMAKER: DurableObjectNamespace;
   DB: D1Database;
   KV: KVNamespace;
   JWT_SECRET: string;
