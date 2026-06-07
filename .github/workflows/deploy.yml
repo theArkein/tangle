@@ -69,7 +69,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 migrations apply tangle-db
+          command: d1 migrations apply tangle-db --remote
 
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
