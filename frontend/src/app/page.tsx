@@ -77,6 +77,11 @@ export default function LobbyPage() {
         if (body.status === 'matched' && body.roomId) {
           clearInterval(pollRef.current!)
           router.push(`/game/?room=${body.roomId}`)
+        } else if (body.status === 'timeout') {
+          // Token expired — drop back to idle so the user can re-queue.
+          clearInterval(pollRef.current!)
+          setPhase('idle')
+          setToken(null)
         }
       } catch {}
     }, 2000)
@@ -245,8 +250,8 @@ export default function LobbyPage() {
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'60vh', textAlign:'center' as const, padding:24, gap:20 }}>
           <div style={{ width:72, height:72, borderRadius:'var(--radius-full)', border:'3px solid var(--n200)', borderTopColor:'var(--n900)', animation:'spin 1s linear infinite' }} />
           <div>
-            <p style={{ fontFamily:'var(--font-display)', fontSize:22, color:'var(--n900)', margin:0 }}>Finding opponent…</p>
-            <p style={{ fontSize:13, color:'var(--n400)', fontFamily:'var(--font-body)', marginTop:6 }}>This usually takes a few seconds</p>
+            <p style={{ fontFamily:'var(--font-display)', fontSize:22, color:'var(--n900)', margin:0 }}>Finding {mode === 'speed_round' ? 'Speed' : 'Classic'} opponent…</p>
+            <p style={{ fontSize:13, color:'var(--n400)', fontFamily:'var(--font-body)', marginTop:6 }}>Players in the other mode won&apos;t match with you</p>
           </div>
           <Button variant="ghost" size="sm" onClick={handleCancel}>Cancel</Button>
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>

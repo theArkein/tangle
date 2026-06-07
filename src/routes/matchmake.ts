@@ -54,8 +54,8 @@ export async function handleMatchmake(
 
   const url = new URL(request.url);
   const token = url.pathname.split("/").pop();
-  if (request.method === "GET" && token) {
-    return pollMatch(token, env);
+  if (request.method === "GET" && token && token !== "matchmake") {
+    return pollMatch(token, playerId, env);
   }
 
   return new Response("Not found", { status: 404 });
@@ -106,11 +106,56 @@ async function enqueue(
   return Response.json({ status: "pending", token, mode });
 }
 
-async function pollMatch(token: string, env: Env): Promise<Response> {
-  const raw = await env.KV.get(`${MATCH_PREFIX}${token}`);
+async function pollMatch(
+  token: string,
+  playerId: string,
+  env: Env
+): Promise<Response> {
+  const matchKey = `${MATCH_PREFIX}${token}`;
+  const raw = await env.KV.get(matchKey);
   if (!raw) {
     return Response.json({ status: "timeout" });
   }
   const entry = JSON.parse(raw) as MatchEntry;
+  if (entry.status === "matched" || !entry.mode) {
+    return Response.json(entry);
+  }
+
+  // Self-heal a KV race: if two players POSTed simultaneously, each may have
+  // seen an empty queue and enqueued themselves. The second write overwrote
+  // the first, leaving both polling forever. On every poll, re-check the queue
+  // and pair up if we find a different waiting player.
+  const key = queueKey(entry.mode);
+  const queueRaw = await env.KV.get(key);
+  if (queueRaw) {
+    const queued = JSON.parse(queueRaw) as QueueEntry;
+    if (queued.playerId !== playerId && queued.token !== token) {
+      const roomId = generateToken();
+      const matched: MatchEntry = { status: "matched", roomId, mode: entry.mode };
+      const matchJson = JSON.stringify(matched);
+      await Promise.all([
+        env.KV.delete(key),
+        env.KV.put(`${MATCH_PREFIX}${queued.token}`, matchJson, {
+          expirationTtl: MATCH_TTL_SECONDS,
+        }),
+        env.KV.put(matchKey, matchJson, { expirationTtl: MATCH_TTL_SECONDS }),
+        env.KV.put(`${MATCH_PREFIX}room:${roomId}:mode`, entry.mode, {
+          expirationTtl: MATCH_TTL_SECONDS,
+        }),
+      ]);
+      return Response.json(matched);
+    }
+  } else {
+    // Queue lost our slot (TTL expired or overwritten by a same-player retry).
+    // Re-claim it so a future joiner can find us.
+    const reentry: QueueEntry = { playerId, token, mode: entry.mode };
+    await Promise.all([
+      env.KV.put(key, JSON.stringify(reentry), {
+        expirationTtl: QUEUE_TTL_SECONDS,
+      }),
+      env.KV.put(matchKey, raw, { expirationTtl: QUEUE_TTL_SECONDS }),
+    ]);
+  }
+
   return Response.json(entry);
 }

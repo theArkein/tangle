@@ -108,6 +108,60 @@ describe("GET /api/matchmake/:token", () => {
     expect(body.status).toBe("timeout");
   });
 
+  it("self-heals a stuck-waiting race by pairing on poll", async () => {
+    // Simulate the KV race: directly seed two stranded waiting entries so that
+    // both players have pending tokens but the queue head only points at one
+    // of them. Without self-heal, both would poll forever; with it, the polling
+    // player pairs with whoever is currently in the queue.
+    const { env } = await import("cloudflare:test");
+    type Env = typeof env & { KV: KVNamespace };
+    const kv = (env as unknown as Env).KV;
+
+    const playerStuck = "player-stuck-a";
+    const playerInQueue = "player-stuck-b";
+    const tokenStuck = "stuck-token-aaaa";
+    const tokenQueued = "queued-token-bb";
+
+    await kv.put(
+      `match:${tokenStuck}`,
+      JSON.stringify({ status: "waiting", mode: "classic" }),
+      { expirationTtl: 60 }
+    );
+    await kv.put(
+      `match:${tokenQueued}`,
+      JSON.stringify({ status: "waiting", mode: "classic" }),
+      { expirationTtl: 60 }
+    );
+    await kv.put(
+      "queue:head:classic",
+      JSON.stringify({ playerId: playerInQueue, token: tokenQueued, mode: "classic" }),
+      { expirationTtl: 60 }
+    );
+
+    const ctx = createExecutionContext();
+    const cookie = await makeSessionCookie(playerStuck);
+    const res = await SELF.fetch(
+      `http://localhost/api/matchmake/${tokenStuck}`,
+      { headers: { Cookie: cookie } }
+    );
+    await waitOnExecutionContext(ctx);
+
+    const body = (await res.json()) as { status: string; roomId?: string };
+    expect(body.status).toBe("matched");
+    expect(typeof body.roomId).toBe("string");
+
+    // The other player polling their own token now also sees matched
+    // with the same roomId.
+    const cookieB = await makeSessionCookie(playerInQueue);
+    const pollB = await SELF.fetch(
+      `http://localhost/api/matchmake/${tokenQueued}`,
+      { headers: { Cookie: cookieB } }
+    );
+    const bodyB = (await pollB.json()) as { status: string; roomId?: string };
+    expect(bodyB.status).toBe("matched");
+    expect(bodyB.roomId).toBe(body.roomId);
+  });
+
   it("returns waiting while no opponent has appeared", async () => {
     const ctx = createExecutionContext();
     const cookie = await makeSessionCookie("player-wait");
