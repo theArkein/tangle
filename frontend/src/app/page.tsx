@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import Button from '@/components/ui/Button'
 import Badge from '@/components/ui/Badge'
 import Card from '@/components/ui/Card'
@@ -170,11 +171,25 @@ export default function LobbyPage() {
           </div>
 
           {/* Action buttons */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 32 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
             <Button variant="primary" size="lg" full onClick={handlePlay}>Play</Button>
             <Button variant="secondary" size="md" full onClick={handleChallengeFriend}>
               {linkCopied ? 'Link copied!' : 'Challenge a friend'}
             </Button>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 28 }}>
+            <Link
+              href="/guide"
+              style={{
+                fontFamily: 'var(--font-body)',
+                fontSize: 13,
+                color: 'var(--n500)',
+                textDecoration: 'none',
+                padding: '4px 8px',
+              }}
+            >
+              New here? <span style={{ color: 'var(--n900)', fontWeight: 500 }}>How to play →</span>
+            </Link>
           </div>
 
           {/* Recent matches label */}
