@@ -120,7 +120,7 @@ const REACTION_OPTIONS: Array<{ key: string; emoji: string }> = [
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const S = {
-  page: { display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', background: 'var(--n50)', color: 'var(--n800)' } as React.CSSProperties,
+  page: { display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', maxWidth: '100vw', overscrollBehavior: 'none', background: 'var(--n50)', color: 'var(--n800)' } as React.CSSProperties,
   centeredFull: { display: 'flex', flexDirection: 'column', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '20px', textAlign: 'center' } as React.CSSProperties,
   header: { background: 'var(--n0)', borderBottom: '1px solid var(--n200)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px' } as React.CSSProperties,
   scoreText: { fontSize: '18px', fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--n800)' } as React.CSSProperties,
@@ -161,6 +161,7 @@ function GameContent() {
   const [keyboardOpen, setKeyboardOpen] = useState(false)
 
   const wsRef = useRef<WebSocket | null>(null)
+  const chainScrollRef = useRef<HTMLDivElement>(null)
   const deferredInstallRef = useRef<BeforeInstallPromptEvent | null>(null)
   const prevStateRef = useRef<MatchState | null>(null)
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -174,7 +175,11 @@ function GameContent() {
     if (!vv) return
     const update = () => setKeyboardOpen(window.innerHeight - vv.height > 150)
     vv.addEventListener('resize', update)
-    return () => vv.removeEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    return () => {
+      vv.removeEventListener('resize', update)
+      vv.removeEventListener('scroll', update)
+    }
   }, [])
 
   // Load current player ID
@@ -354,6 +359,13 @@ function GameContent() {
     }, 250)
     return () => clearInterval(id)
   }, [matchState?.status])
+
+  // Auto-scroll chain to the latest word whenever chain grows
+  useEffect(() => {
+    const el = chainScrollRef.current
+    if (!el) return
+    el.scrollTo({ left: el.scrollWidth, behavior: 'smooth' })
+  }, [matchState?.currentRound?.chain.length])
 
   const submitWord = useCallback(() => {
     const word = wordInput.trim().toLowerCase()
@@ -770,10 +782,10 @@ function GameContent() {
       )}
 
       {/* ── Main: opponent card / chain / player card ── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px 14px', gap: '8px', minHeight: 0 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px 14px', gap: '8px', minHeight: 0, overflow: 'hidden' }}>
 
         {/* Opponent card */}
-        <div style={{ background: 'var(--n0)', border: `1.5px solid ${!isMyTurn ? 'var(--n500)' : 'var(--n200)'}`, borderRadius: 'var(--radius-xl)', padding: '10px 12px', flexShrink: 0 }}>
+        <div style={{ background: 'var(--n0)', border: `1.5px solid ${!isMyTurn ? 'var(--n500)' : 'var(--n200)'}`, borderRadius: 'var(--radius-xl)', padding: keyboardOpen ? '6px 10px' : '10px 12px', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
             <Avatar name="?" variant="p2" size={28} />
             <div style={{ flex: 1 }}>
@@ -798,7 +810,7 @@ function GameContent() {
               ))}
             </div>
           )}
-          {gameMode === 'classic' && (
+          {gameMode === 'classic' && !keyboardOpen && (
             <div style={{ display: 'flex', gap: '3px' }}>
               {(Object.keys(POWER_UP_LABELS) as PowerUpId[]).map((id) => {
                 const count = opponentInventory[id] ?? 0
@@ -814,31 +826,38 @@ function GameContent() {
           )}
         </div>
 
-        {/* Word chain */}
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexWrap: 'wrap', gap: '8px', alignContent: 'center', justifyContent: 'center', padding: '4px 0' }}>
+        {/* Word chain — horizontal scroll, auto-advances to latest word */}
+        <div
+          ref={chainScrollRef}
+          className="chain-scroll"
+          style={{ flex: 1, minHeight: 0, overflowX: 'auto', overflowY: 'hidden', display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 14px' }}
+        >
           {blindOnMe && blindOnMe.kind === 'blind' ? (
-            <div style={{ textAlign: 'center', width: '100%', color: 'var(--n400)' }}>
-              <div style={{ fontSize: 36, marginBottom: 6 }}>🙈</div>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Chain hidden</div>
+            <div style={{ flex: 1, textAlign: 'center', color: 'var(--n400)' }}>
+              <div style={{ fontSize: 28, marginBottom: 4 }}>🙈</div>
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>Chain hidden</div>
               <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)' }}>{blindOnMe.turnsRemaining}T left</div>
             </div>
           ) : round.chain.length === 0 ? (
-            <div style={{ textAlign: 'center', width: '100%' }}>
-              <div style={{ ...S.sectionLabel, marginBottom: '8px' }}>Start with</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '48px', color: 'var(--n900)', letterSpacing: '-1px' }}>{round.seedLetter.toUpperCase()}</div>
+            <div style={{ flex: 1, textAlign: 'center' }}>
+              <div style={{ ...S.sectionLabel, marginBottom: '6px' }}>Start with</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '40px', color: 'var(--n900)', letterSpacing: '-1px' }}>{round.seedLetter.toUpperCase()}</div>
             </div>
           ) : (
             round.chain.map((word, i) => {
               const isOwn = matchState.player1Id === myId ? i % 2 === 0 : i % 2 !== 0
               const isLong = word.length >= 8
               return (
-                <span key={i} style={isLong ? { display: 'inline-flex', animation: 'wordShimmer 1.6s ease-out' } : undefined}>
+                <span key={i} style={{ flexShrink: 0, display: 'inline-flex', ...(isLong ? { animation: 'wordShimmer 1.6s ease-out' } : {}) }}>
                   <WordPill word={word} variant={isOwn ? 'player1' : 'player2'} size="sm" />
                 </span>
               )
             })
           )}
           <style>{`
+            html, body { overflow: hidden; max-width: 100vw; overscroll-behavior: none; }
+            .chain-scroll::-webkit-scrollbar { display: none; }
+            .chain-scroll { scrollbar-width: none; }
             @keyframes wordShimmer { 0% { filter: brightness(1.6) saturate(1.5); transform: scale(1.05); } 100% { filter: brightness(1) saturate(1); transform: scale(1); } }
             @keyframes earnGlow { 0% { box-shadow: 0 0 0 2px #4caf50; } 60% { box-shadow: 0 0 8px 4px #4caf5088; } 100% { box-shadow: 0 0 0 2px #4caf50; } }
             @keyframes activateFlash { 0% { background: var(--accent-warm-faint); } 50% { background: #ffe09a; } 100% { background: var(--n0); } }
@@ -846,7 +865,7 @@ function GameContent() {
         </div>
 
         {/* Player card */}
-        <div style={{ background: 'var(--n0)', border: `1.5px solid ${isMyTurn ? 'var(--success)' : 'var(--n200)'}`, borderRadius: 'var(--radius-xl)', padding: '10px 12px', flexShrink: 0 }}>
+        <div style={{ background: 'var(--n0)', border: `1.5px solid ${isMyTurn ? 'var(--success)' : 'var(--n200)'}`, borderRadius: 'var(--radius-xl)', padding: keyboardOpen ? '6px 10px' : '10px 12px', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
             <Avatar name="You" variant="p1" size={28} />
             <div style={{ flex: 1 }}>
@@ -871,7 +890,7 @@ function GameContent() {
               ))}
             </div>
           )}
-          {gameMode === 'classic' && (
+          {gameMode === 'classic' && !keyboardOpen && (
             <div style={{ display: 'flex', gap: '3px' }}>
               {(Object.keys(POWER_UP_LABELS) as PowerUpId[]).map((id) => {
                 const count = myInventory[id] ?? 0
