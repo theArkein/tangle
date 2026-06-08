@@ -39,8 +39,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
       .catch(() => {})
   }, [])
 
-  // Game routes opt out of navigation shell
-  if (pathname.startsWith('/game')) {
+  // Game and mockup routes opt out of navigation shell
+  if (pathname.startsWith('/game') || pathname.startsWith('/mockup')) {
     return <>{children}</>
   }
 
