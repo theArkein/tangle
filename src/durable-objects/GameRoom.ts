@@ -1003,7 +1003,7 @@ export class GameRoom implements DurableObject {
           const round = stored.matchState?.currentRound;
           // Bot turn: skip the full turn timer, schedule a short bot-move delay instead.
           if (stored.botPlayerId && round?.currentPlayerId === stored.botPlayerId) {
-            const delay = 800 + Math.floor(Math.random() * 1200);
+            const delay = 2500 + Math.floor(Math.random() * 2000);
             await this.setAlarm(stored, "bot_turn", Date.now() + delay);
             stored.turnStartAt = Date.now();
             break;
