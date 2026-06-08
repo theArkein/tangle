@@ -148,6 +148,8 @@ function GameContent() {
   const [showInstallPrompt, setShowInstallPrompt] = useState(false)
   const [powerUpToast, setPowerUpToast] = useState<{ id: PowerUpId; source: string } | null>(null)
   const [activatedFeed, setActivatedFeed] = useState<{ id: PowerUpId; byMe: boolean } | null>(null)
+  const [myHighlights, setMyHighlights] = useState<Partial<Record<PowerUpId, 'earned' | 'activated'>>>({})
+  const [oppHighlights, setOppHighlights] = useState<Partial<Record<PowerUpId, 'earned' | 'activated'>>>({})
   const [reactionFeed, setReactionFeed] = useState<Array<{ id: number; emoji: string; byMe: boolean }>>([])
   const [forfeitedBy, setForfeitedBy] = useState<string | null>(null)
   const [opponentTyping, setOpponentTyping] = useState<string>('')
@@ -220,7 +222,9 @@ function GameContent() {
       }
 
       if (msg.type === 'power_up_earned') {
-        // Toast only for the player who earned it
+        const setter = msg.playerId === myId ? setMyHighlights : setOppHighlights
+        setter(h => ({ ...h, [msg.powerup]: 'earned' }))
+        setTimeout(() => setter(h => { const n = { ...h }; delete n[msg.powerup]; return n }), 1500)
         if (msg.playerId === myId) {
           setPowerUpToast({ id: msg.powerup, source: msg.source })
           setTimeout(() => setPowerUpToast(null), 2500)
@@ -229,12 +233,18 @@ function GameContent() {
       }
 
       if (msg.type === 'power_up_activated') {
+        const setter = msg.byPlayerId === myId ? setMyHighlights : setOppHighlights
+        setter(h => ({ ...h, [msg.powerup]: 'activated' }))
+        setTimeout(() => setter(h => { const n = { ...h }; delete n[msg.powerup]; return n }), 1000)
         setActivatedFeed({ id: msg.powerup, byMe: msg.byPlayerId === myId })
         setTimeout(() => setActivatedFeed(null), 2500)
         return
       }
 
       if (msg.type === 'second_life_consumed') {
+        const setter = msg.playerId === myId ? setMyHighlights : setOppHighlights
+        setter(h => ({ ...h, secondLife: 'activated' }))
+        setTimeout(() => setter(h => { const n = { ...h }; delete n.secondLife; return n }), 1000)
         setActivatedFeed({ id: 'secondLife', byMe: msg.playerId === myId })
         setTimeout(() => setActivatedFeed(null), 2500)
         return
@@ -344,7 +354,7 @@ function GameContent() {
     wsRef.current.send(JSON.stringify({ type: 'next_round_request' }))
   }, [])
 
-  const usePowerUp = useCallback((id: PowerUpId) => {
+  const activatePowerUp = useCallback((id: PowerUpId) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
     wsRef.current.send(JSON.stringify({ type: 'use_powerup', powerup: id }))
   }, [])
@@ -651,7 +661,7 @@ function GameContent() {
   const modeCfg = MODE_CONFIG[gameMode]
   const emptyInv: PowerUpInventory = { freeze: 0, secondLife: 0, letterBomb: 0, block: 0, swap: 0, blind: 0, shrink: 0, rush: 0, steal: 0, peek: 0, blitz: 0, wildfire: 0 }
   const myInventory: PowerUpInventory = round.powerUpInventory[myId] ?? emptyInv
-  const totalMyPowerUps = (Object.values(myInventory) as number[]).reduce((sum: number, v) => sum + v, 0)
+  const opponentInventory: PowerUpInventory = round.powerUpInventory[opponentId] ?? emptyInv
   const myLetterBomb = round.activeEffects.find(e => e.kind === 'letterBomb' && e.onPlayerId === myId)
   const opponentLetterBomb = round.activeEffects.find(e => e.kind === 'letterBomb' && e.onPlayerId === opponentId)
   const myShrink = round.activeEffects.find(e => e.kind === 'shrink' && e.onPlayerId === myId)
@@ -781,7 +791,7 @@ function GameContent() {
       {/* Blitz claimed indicator */}
       {myBlitzClaimed && (
         <div style={{ background: 'var(--accent-warm-faint)', borderBottom: '1px solid var(--accent-warm-light)', padding: '6px 14px', fontSize: '11px', color: 'var(--accent-warm-muted)', textAlign: 'center', flexShrink: 0 }}>
-          ⚔️ Blitz claimed — you'll get another turn after this word
+          ⚔️ Blitz claimed — you&apos;ll get another turn after this word
         </div>
       )}
 
@@ -854,43 +864,74 @@ function GameContent() {
             )
           })
         )}
-        <style>{`@keyframes wordShimmer { 0% { filter: brightness(1.6) saturate(1.5); transform: scale(1.05); } 100% { filter: brightness(1) saturate(1); transform: scale(1); } }`}</style>
+        <style>{`
+          @keyframes wordShimmer { 0% { filter: brightness(1.6) saturate(1.5); transform: scale(1.05); } 100% { filter: brightness(1) saturate(1); transform: scale(1); } }
+          @keyframes earnGlow { 0% { box-shadow: 0 0 0 2px #4caf50; } 60% { box-shadow: 0 0 8px 4px #4caf5088; } 100% { box-shadow: 0 0 0 2px #4caf50; } }
+          @keyframes activateFlash { 0% { background: var(--accent-warm-faint); } 50% { background: #ffe09a; } 100% { background: var(--n0); } }
+        `}</style>
       </div>
 
       {/* Bottom panel */}
       <div style={S.bottomPanel}>
         {/* Power-up HUD */}
-        {gameMode === 'classic' && totalMyPowerUps > 0 && (
-          <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' }}>
-            {(Object.entries(myInventory) as Array<[PowerUpId, number]>)
-              .filter(([, count]) => count > 0)
-              .map(([id, count]) => (
-                <button
-                  key={id}
-                  onClick={() => usePowerUp(id)}
-                  disabled={!isMyTurn && id !== 'secondLife' && id !== 'block'}
-                  style={{
-                    background: 'var(--n0)',
-                    border: '1px solid var(--n200)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '6px 10px',
-                    fontSize: '12px',
-                    fontFamily: 'var(--font-heading)',
-                    color: 'var(--n800)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    opacity: (!isMyTurn && id !== 'secondLife' && id !== 'block') ? 0.45 : 1,
-                  }}
-                  title={POWER_UP_LABELS[id].name}
-                >
-                  <span>{POWER_UP_LABELS[id].emoji}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--n500)' }}>
-                    ×{count}
-                  </span>
-                </button>
-              ))}
+        {gameMode === 'classic' && (
+          <div style={{ marginBottom: '10px' }}>
+            <div style={{ ...S.sectionLabel, marginBottom: '4px' }}>Opponent</div>
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '8px' }}>
+              {(Object.keys(POWER_UP_LABELS) as PowerUpId[]).map((id) => {
+                const count = opponentInventory[id] ?? 0
+                const hl = oppHighlights[id]
+                return (
+                  <div
+                    key={id}
+                    title={POWER_UP_LABELS[id].name}
+                    style={{
+                      width: 40, height: 44,
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
+                      border: hl === 'earned' ? '1px solid #4caf50' : hl === 'activated' ? '1px solid var(--accent-warm)' : '1px solid var(--n200)',
+                      borderRadius: 'var(--radius-md)',
+                      background: 'var(--n0)',
+                      opacity: count === 0 ? 0.3 : 1,
+                      filter: count === 0 ? 'grayscale(1)' : 'none',
+                      animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none',
+                    }}
+                  >
+                    <span style={{ fontSize: 18 }}>{POWER_UP_LABELS[id].emoji}</span>
+                    <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--n500)', visibility: count > 0 ? 'visible' : 'hidden' }}>×{count}</span>
+                  </div>
+                )
+              })}
+            </div>
+            <div style={{ ...S.sectionLabel, marginBottom: '4px' }}>You</div>
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+              {(Object.keys(POWER_UP_LABELS) as PowerUpId[]).map((id) => {
+                const count = myInventory[id] ?? 0
+                const hl = myHighlights[id]
+                const turnLocked = !isMyTurn && id !== 'secondLife' && id !== 'block'
+                return (
+                  <button
+                    key={id}
+                    onClick={() => activatePowerUp(id)}
+                    disabled={count === 0 || turnLocked}
+                    title={POWER_UP_LABELS[id].name}
+                    style={{
+                      width: 40, height: 44, padding: 0,
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
+                      border: hl === 'earned' ? '1px solid #4caf50' : hl === 'activated' ? '1px solid var(--accent-warm)' : '1px solid var(--n200)',
+                      borderRadius: 'var(--radius-md)',
+                      background: 'var(--n0)',
+                      cursor: count > 0 && !turnLocked ? 'pointer' : 'default',
+                      opacity: count === 0 ? 0.3 : (turnLocked ? 0.45 : 1),
+                      filter: count === 0 ? 'grayscale(1)' : 'none',
+                      animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none',
+                    }}
+                  >
+                    <span style={{ fontSize: 18 }}>{POWER_UP_LABELS[id].emoji}</span>
+                    <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--n500)', visibility: count > 0 ? 'visible' : 'hidden' }}>×{count}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
         )}
 
