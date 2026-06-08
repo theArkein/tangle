@@ -120,7 +120,7 @@ const REACTION_OPTIONS: Array<{ key: string; emoji: string }> = [
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const S = {
-  page: { display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--n50)', color: 'var(--n800)' } as React.CSSProperties,
+  page: { display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', background: 'var(--n50)', color: 'var(--n800)' } as React.CSSProperties,
   centeredFull: { display: 'flex', flexDirection: 'column', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '20px', textAlign: 'center' } as React.CSSProperties,
   header: { background: 'var(--n0)', borderBottom: '1px solid var(--n200)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px' } as React.CSSProperties,
   scoreText: { fontSize: '18px', fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--n800)' } as React.CSSProperties,
@@ -158,6 +158,8 @@ function GameContent() {
   const [forfeitedBy, setForfeitedBy] = useState<string | null>(null)
   const [opponentTyping, setOpponentTyping] = useState<string>('')
 
+  const [keyboardOpen, setKeyboardOpen] = useState(false)
+
   const wsRef = useRef<WebSocket | null>(null)
   const deferredInstallRef = useRef<BeforeInstallPromptEvent | null>(null)
   const prevStateRef = useRef<MatchState | null>(null)
@@ -165,6 +167,15 @@ function GameContent() {
   const turnStartAtRef = useRef(0)
   const nextRoundStartedAtRef = useRef(0)
   const reactionIdRef = useRef(0)
+
+  // Detect soft keyboard open via visual viewport shrink
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const update = () => setKeyboardOpen(window.innerHeight - vv.height > 150)
+    vv.addEventListener('resize', update)
+    return () => vv.removeEventListener('resize', update)
+  }, [])
 
   // Load current player ID
   useEffect(() => {
@@ -804,7 +815,7 @@ function GameContent() {
         </div>
 
         {/* Word chain */}
-        <div style={{ flex: 1, minHeight: 60, overflowY: 'auto', display: 'flex', flexWrap: 'wrap', gap: '8px', alignContent: 'center', justifyContent: 'center', padding: '4px 0' }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexWrap: 'wrap', gap: '8px', alignContent: 'center', justifyContent: 'center', padding: '4px 0' }}>
           {blindOnMe && blindOnMe.kind === 'blind' ? (
             <div style={{ textAlign: 'center', width: '100%', color: 'var(--n400)' }}>
               <div style={{ fontSize: 36, marginBottom: 6 }}>🙈</div>
@@ -892,8 +903,8 @@ function GameContent() {
       {/* Bottom strip */}
       <div style={S.bottomPanel}>
 
-        {/* Reaction bar */}
-        <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', justifyContent: 'center' }}>
+        {/* Reaction bar — hidden while keyboard is open to reclaim space */}
+        <div style={{ display: keyboardOpen ? 'none' : 'flex', gap: '6px', marginBottom: '10px', justifyContent: 'center' }}>
           {REACTION_OPTIONS.map(r => (
             <button
               key={r.key}
@@ -968,6 +979,8 @@ function GameContent() {
             autoCorrect="off"
             autoCapitalize="none"
             spellCheck={false}
+            inputMode="text"
+            enterKeyHint="send"
             style={{ ...S.input, opacity: !isMyTurn || submitting ? 0.45 : 1, cursor: !isMyTurn || submitting ? 'not-allowed' : 'text' }}
           />
           <Button
