@@ -476,6 +476,7 @@ function GameContent() {
   if (matchState.status === 'match_complete') {
     const won = matchState.matchWinnerId === myId
     const opponentId = matchState.player1Id === myId ? matchState.player2Id : matchState.player1Id
+    const isBotMatch = opponentId === 'bot'
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--n0)' }}>
@@ -567,7 +568,7 @@ function GameContent() {
 
         {/* Actions */}
         <div style={{ flexShrink: 0, borderTop: '1px solid var(--n100)', padding: '16px 16px 32px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {rematchState === 'idle' ? (
+          {!isBotMatch && (rematchState === 'idle' ? (
             <Button variant="primary" size="lg" full onClick={sendRematchRequest}>Rematch</Button>
           ) : (
             <div style={{ height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', border: '1px solid var(--n200)', borderRadius: 'var(--radius-md)', background: 'var(--n0)' }}>
@@ -575,8 +576,8 @@ function GameContent() {
               <span style={{ fontSize: '13px', color: 'var(--n500)' }}>Waiting for opponent…</span>
               <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </div>
-          )}
-          <Button variant="secondary" size="lg" full onClick={() => router.push('/')}>Back to lobby</Button>
+          ))}
+          <Button variant={isBotMatch ? 'primary' : 'secondary'} size="lg" full onClick={() => router.push('/')}>Back to lobby</Button>
           {showInstallPrompt && (
             <Button
               variant="ghost"
@@ -656,6 +657,7 @@ function GameContent() {
 
   const isMyTurn = round.currentPlayerId === myId
   const opponentId = matchState.player1Id === myId ? matchState.player2Id : matchState.player1Id
+  const opponentName = opponentId === 'bot' ? 'Bot' : 'Opponent'
   const myWins = matchState.roundWins[myId] ?? 0
   const oppWins = matchState.roundWins[opponentId] ?? 0
   const myFaults = round.faults[myId] ?? 0
@@ -765,7 +767,7 @@ function GameContent() {
             <Avatar name="?" variant="p2" size={28} />
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n800)' }}>Opponent</span>
+                <span style={{ fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n800)' }}>{opponentName}</span>
                 {!isMyTurn && <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.06em', background: 'var(--n900)', color: 'var(--n0)', padding: '1px 5px', borderRadius: '99px' }}>TURN</span>}
               </div>
               <div style={{ display: 'flex', gap: '2px', marginTop: '3px' }}>
