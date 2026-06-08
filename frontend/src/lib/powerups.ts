@@ -49,6 +49,9 @@ export interface PowerUpGuideEntry {
   // Guide-only longer-form copy.
   howItWorks: string
   example: string
+  // Shown in the toast when the OPPONENT earns this power-up.
+  // Frames the effect from the local player's point of view.
+  opponentDescription: string
 }
 
 export const POWER_UP_GUIDE: PowerUpGuideEntry[] = [
@@ -56,6 +59,7 @@ export const POWER_UP_GUIDE: PowerUpGuideEntry[] = [
     id: 'freeze',
     name: 'Freeze',
     description: "Pause your opponent's timer for 5 seconds.",
+    opponentDescription: 'They can pause your timer for 5 seconds.',
     category: 'defensive',
     rarity: 'common',
     howItWorks:
@@ -66,6 +70,7 @@ export const POWER_UP_GUIDE: PowerUpGuideEntry[] = [
     id: 'secondLife',
     name: 'Second Life',
     description: 'Survive one timeout this round without losing.',
+    opponentDescription: 'They can survive one timeout this round without losing.',
     category: 'defensive',
     rarity: 'common',
     howItWorks:
@@ -76,6 +81,7 @@ export const POWER_UP_GUIDE: PowerUpGuideEntry[] = [
     id: 'peek',
     name: 'Peek',
     description: 'See what your opponent is currently typing for one turn.',
+    opponentDescription: 'They can watch what you type for one turn.',
     category: 'defensive',
     rarity: 'uncommon',
     howItWorks:
@@ -86,6 +92,7 @@ export const POWER_UP_GUIDE: PowerUpGuideEntry[] = [
     id: 'letterBomb',
     name: 'Letter Bomb',
     description: "Force opponent's next word to contain Q, X, Z, or J.",
+    opponentDescription: 'Your next word may need to contain Q, X, Z, or J.',
     category: 'offensive',
     rarity: 'common',
     howItWorks:
@@ -96,6 +103,7 @@ export const POWER_UP_GUIDE: PowerUpGuideEntry[] = [
     id: 'block',
     name: 'Block',
     description: "Reject opponent's last word. They must replay with a different word, time preserved.",
+    opponentDescription: 'They can reject your last word — you would replay it.',
     category: 'offensive',
     rarity: 'common',
     howItWorks:
@@ -106,6 +114,7 @@ export const POWER_UP_GUIDE: PowerUpGuideEntry[] = [
     id: 'shrink',
     name: 'Shrink',
     description: "Opponent's next word must be 4 letters or fewer.",
+    opponentDescription: 'They can cap your next word to 4 letters or fewer.',
     category: 'offensive',
     rarity: 'uncommon',
     howItWorks:
@@ -116,6 +125,7 @@ export const POWER_UP_GUIDE: PowerUpGuideEntry[] = [
     id: 'swap',
     name: 'Swap',
     description: 'Change the next required letter to one of your choice. Consumes your turn.',
+    opponentDescription: 'They can swap the chain seed letter to anything they choose.',
     category: 'offensive',
     rarity: 'uncommon',
     howItWorks:
@@ -126,6 +136,7 @@ export const POWER_UP_GUIDE: PowerUpGuideEntry[] = [
     id: 'rush',
     name: 'Rush',
     description: "Cut opponent's timer in half for their next turn.",
+    opponentDescription: 'They can halve your timer for your next turn.',
     category: 'offensive',
     rarity: 'uncommon',
     howItWorks:
@@ -136,6 +147,7 @@ export const POWER_UP_GUIDE: PowerUpGuideEntry[] = [
     id: 'blind',
     name: 'Blind',
     description: 'Hide the chain from your opponent for 2 turns.',
+    opponentDescription: 'They can hide the chain history from you for 2 turns.',
     category: 'disruption',
     rarity: 'uncommon',
     howItWorks:
@@ -146,6 +158,7 @@ export const POWER_UP_GUIDE: PowerUpGuideEntry[] = [
     id: 'steal',
     name: 'Steal',
     description: "Take opponent's last word and add its points to your score.",
+    opponentDescription: 'They can take your last word and its points.',
     category: 'disruption',
     rarity: 'rare',
     howItWorks:
@@ -156,6 +169,7 @@ export const POWER_UP_GUIDE: PowerUpGuideEntry[] = [
     id: 'blitz',
     name: 'Blitz',
     description: "Play two words in a row, skipping opponent's turn.",
+    opponentDescription: 'They can play two words back-to-back, skipping your turn.',
     category: 'disruption',
     rarity: 'rare',
     howItWorks:
@@ -166,6 +180,7 @@ export const POWER_UP_GUIDE: PowerUpGuideEntry[] = [
     id: 'wildfire',
     name: 'Wildfire',
     description: 'All words score 3× for both players for the next 3 turns.',
+    opponentDescription: 'All words score 3× for both players for the next 3 turns.',
     category: 'chaos',
     rarity: 'rare',
     howItWorks:

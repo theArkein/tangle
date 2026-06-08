@@ -7,7 +7,7 @@ import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
 import WordPill from '@/components/ui/WordPill'
 import TimerBar from '@/components/ui/TimerBar'
-import { POWER_UP_LABELS, type PowerUpId } from '@/lib/powerups'
+import { POWER_UP_LABELS, POWER_UP_GUIDE, type PowerUpId } from '@/lib/powerups'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>
@@ -107,6 +107,10 @@ const MODE_CONFIG: Record<GameMode, { displayName: string; turnSeconds: number; 
   speed_round: { displayName: 'Speed Round', turnSeconds: 8, maxFaults: 1 },
 }
 
+const POWER_UP_DESC = Object.fromEntries(
+  POWER_UP_GUIDE.map(e => [e.id, { self: e.description, opponent: e.opponentDescription }])
+) as Record<PowerUpId, { self: string; opponent: string }>
+
 const REACTION_OPTIONS: Array<{ key: string; emoji: string }> = [
   { key: 'fire', emoji: '🔥' },
   { key: 'shocked', emoji: '😱' },
@@ -146,7 +150,7 @@ function GameContent() {
   const [rematchState, setRematchState] = useState<'idle' | 'pending'>('idle')
   const [showLinkPrompt, setShowLinkPrompt] = useState(false)
   const [showInstallPrompt, setShowInstallPrompt] = useState(false)
-  const [powerUpToast, setPowerUpToast] = useState<{ id: PowerUpId; source: string } | null>(null)
+  const [powerUpToast, setPowerUpToast] = useState<{ id: PowerUpId; source: string; byMe: boolean } | null>(null)
   const [activatedFeed, setActivatedFeed] = useState<{ id: PowerUpId; byMe: boolean } | null>(null)
   const [myHighlights, setMyHighlights] = useState<Partial<Record<PowerUpId, 'earned' | 'activated'>>>({})
   const [oppHighlights, setOppHighlights] = useState<Partial<Record<PowerUpId, 'earned' | 'activated'>>>({})
@@ -222,13 +226,12 @@ function GameContent() {
       }
 
       if (msg.type === 'power_up_earned') {
-        const setter = msg.playerId === myId ? setMyHighlights : setOppHighlights
+        const isMe = msg.playerId === myId
+        const setter = isMe ? setMyHighlights : setOppHighlights
         setter(h => ({ ...h, [msg.powerup]: 'earned' }))
         setTimeout(() => setter(h => { const n = { ...h }; delete n[msg.powerup]; return n }), 1500)
-        if (msg.playerId === myId) {
-          setPowerUpToast({ id: msg.powerup, source: msg.source })
-          setTimeout(() => setPowerUpToast(null), 2500)
-        }
+        setPowerUpToast({ id: msg.powerup, source: msg.source, byMe: isMe })
+        setTimeout(() => setPowerUpToast(null), 4000)
         return
       }
 
@@ -699,9 +702,16 @@ function GameContent() {
     <div style={S.page}>
       {/* Power-up earned toast */}
       {powerUpToast && (
-        <div style={{ position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 60, background: 'var(--n900)', color: 'var(--n0)', padding: '10px 14px', borderRadius: 'var(--radius-md)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
-          <span style={{ fontSize: '18px' }}>{POWER_UP_LABELS[powerUpToast.id].emoji}</span>
-          <span>Earned {POWER_UP_LABELS[powerUpToast.id].name}</span>
+        <div style={{ position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 60, background: powerUpToast.byMe ? 'var(--n900)' : 'var(--n700)', color: 'var(--n0)', padding: '10px 14px', borderRadius: 'var(--radius-md)', boxShadow: '0 4px 16px rgba(0,0,0,0.15)', display: 'flex', alignItems: 'center', gap: '10px', maxWidth: 280 }}>
+          <span style={{ fontSize: '20px', flexShrink: 0 }}>{POWER_UP_LABELS[powerUpToast.id].emoji}</span>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: 600, lineHeight: 1.2 }}>
+              {powerUpToast.byMe ? 'Earned' : 'Opponent earned'} {POWER_UP_LABELS[powerUpToast.id].name}
+            </div>
+            <div style={{ fontSize: '11px', opacity: 0.75, marginTop: '3px', lineHeight: 1.3 }}>
+              {powerUpToast.byMe ? POWER_UP_DESC[powerUpToast.id].self : POWER_UP_DESC[powerUpToast.id].opponent}
+            </div>
+          </div>
         </div>
       )}
 
