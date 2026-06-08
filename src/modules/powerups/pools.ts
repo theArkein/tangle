@@ -19,6 +19,12 @@ export const TRIGGER_CATEGORY: Record<DropSource, Category> = {
 // Number of words in the chain that triggers the "long chain" disruption drop.
 export const CHAIN_LENGTH_THRESHOLD = 10;
 
+// Chain length at which the Danger Zone begins.
+export const DANGER_ZONE_CHAIN_THRESHOLD = 20;
+
+// Score multiplier applied to all words in the Danger Zone.
+export const DANGER_ZONE_MULTIPLIER = 3;
+
 // Rarity weights within a pool. Forward-compatible: in Phase 1 every
 // definition is `common`, so this is effectively a no-op.
 export const RARITY_WEIGHTS: Record<Rarity, number> = {

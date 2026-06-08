@@ -15,6 +15,7 @@ export interface Env {
   ENVIRONMENT: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
+  DANGER_ZONE_ENABLED?: string;
 }
 
 export default {

@@ -30,6 +30,7 @@ id = "c3f048d469864179b4b20a29d9fb5727"
 
 [vars]
 ENVIRONMENT = "development"
+DANGER_ZONE_ENABLED = "false"
 
 [[routes]]
 pattern = "tangle.saradsingh.com.np"
