@@ -111,6 +111,16 @@ export default function LobbyPage() {
     setToken(null)
   }
 
+  async function handlePlayVsBot() {
+    const res = await fetch('/api/rooms/vs-bot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode }),
+    })
+    const body = (await res.json()) as { roomId?: string }
+    if (body.roomId) router.push(`/game/?room=${body.roomId}`)
+  }
+
   async function handleChallengeFriend() {
     const res = await fetch('/api/rooms', { method: 'POST' })
     const { roomId } = (await res.json()) as { roomId: string }
@@ -173,9 +183,14 @@ export default function LobbyPage() {
           {/* Action buttons */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
             <Button variant="primary" size="lg" full onClick={handlePlay}>Play</Button>
-            <Button variant="secondary" size="md" full onClick={handleChallengeFriend}>
-              {linkCopied ? 'Link copied!' : 'Challenge a friend'}
-            </Button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button variant="secondary" size="md" full onClick={handleChallengeFriend}>
+                {linkCopied ? 'Link copied!' : 'Challenge a friend'}
+              </Button>
+              <Button variant="secondary" size="md" full onClick={handlePlayVsBot}>
+                Practice vs Bot
+              </Button>
+            </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 28 }}>
             <Link

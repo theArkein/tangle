@@ -50,7 +50,7 @@ const NEXT_ROUND_TIMEOUT_MS = 30_000;
 const DANGER_ZONE_TIMER_MS = 5_000;
 const SEED_LETTERS = "abcdefghijklmnoprstw";
 
-type AlarmKind = "turn" | "rematch" | "next_round";
+type AlarmKind = "turn" | "rematch" | "next_round" | "bot_turn";
 
 function randomSeedLetter(): string {
   return SEED_LETTERS[Math.floor(Math.random() * SEED_LETTERS.length)] ?? "a";
@@ -67,6 +67,7 @@ interface RoomStorage {
   alarmKind?: AlarmKind | undefined;
   turnStartAt?: number | undefined;
   gameMode?: GameMode | undefined;
+  botPlayerId?: string | undefined;
 }
 
 export class GameRoom implements DurableObject {
@@ -95,6 +96,17 @@ export class GameRoom implements DurableObject {
         if (isValidGameMode(body.mode)) stored.gameMode = body.mode;
       } catch {
         // No body — leave as default
+      }
+      await this.saveRoom(stored);
+      return new Response(null, { status: 204 });
+    }
+
+    if (url.pathname === "/add-bot" && request.method === "POST") {
+      const stored = await this.loadRoom();
+      if (!stored.playerIds.includes("bot")) {
+        stored.playerIds.push("bot");
+        stored.scores["bot"] = 0;
+        stored.botPlayerId = "bot";
       }
       await this.saveRoom(stored);
       return new Response(null, { status: 204 });
@@ -740,6 +752,11 @@ export class GameRoom implements DurableObject {
     const kind = stored.alarmKind;
     stored.alarmKind = undefined;
 
+    if (kind === "bot_turn") {
+      await this.handleBotTurn(stored);
+      return;
+    }
+
     if (kind === "rematch") {
       if (stored.matchState?.status === "match_complete" && stored.rematchRequests.length > 0) {
         this.broadcastToPlayer(
@@ -827,6 +844,122 @@ export class GameRoom implements DurableObject {
     await this.applyEffects(result.effects, stored);
   }
 
+  private async handleBotTurn(stored: RoomStorage): Promise<void> {
+    if (!stored.matchState || stored.matchState.status !== "round_active") return;
+    const round = stored.matchState.currentRound;
+    if (!round || round.currentPlayerId !== stored.botPlayerId) return;
+
+    const word = await this.dictionary.pickWord(round.seedLetter, new Set(round.chain));
+    if (!word) {
+      const prevRound = round.roundNumber;
+      const result = transition(stored.matchState, {
+        type: "turnTimeout",
+        playerId: stored.botPlayerId!,
+      });
+      stored.matchState = result.state;
+      this.saveRoundHistoryIfEnded(stored, prevRound);
+      await this.saveRoom(stored);
+      await this.applyEffects(result.effects, stored);
+      await this.maybeAutoConfirmNextRound();
+      return;
+    }
+
+    await this.submitWordForBot(stored, word);
+  }
+
+  private async submitWordForBot(stored: RoomStorage, word: string): Promise<void> {
+    const botId = stored.botPlayerId!;
+    const state = stored.matchState!;
+    const round = state.currentRound!;
+
+    const validation = await validate(
+      word,
+      round.seedLetter,
+      new Set(round.chain),
+      this.dictionary,
+      {}
+    );
+
+    if (!validation.valid) {
+      const result = transition(state, { type: "invalidWord", playerId: botId });
+      const prevRound = round.roundNumber;
+      stored.matchState = result.state;
+      this.saveRoundHistoryIfEnded(stored, prevRound);
+      await this.saveRoom(stored);
+      await this.applyEffects(result.effects, stored);
+      await this.maybeAutoConfirmNextRound();
+      return;
+    }
+
+    const scoreResult = score(word, { multiplier: 1 });
+    stored.currentRoundWords.push({
+      word,
+      playerId: botId,
+      points: scoreResult.points,
+      breakdown: scoreResult.breakdown,
+    });
+
+    const prevRoundScore = round.playerRoundScores[botId] ?? 0;
+    const newRoundScore = prevRoundScore + scoreResult.points;
+    const evalResult = evaluateDrops({
+      playerId: botId,
+      prevRoundScore,
+      newRoundScore,
+      breakdown: scoreResult.breakdown,
+      triggers: round.dropTriggers,
+      chainLength: round.chain.length + 1,
+      isDangerZone: false,
+    });
+
+    const wordResult = transition(state, {
+      type: "wordSubmitted",
+      playerId: botId,
+      word,
+      points: scoreResult.points,
+    });
+    stored.matchState = wordResult.state;
+
+    if (stored.matchState.currentRound) {
+      stored.matchState.currentRound.seedLetter = word[word.length - 1] ?? round.seedLetter;
+      stored.matchState.currentRound.dropTriggers = evalResult.triggers;
+
+      for (const drop of evalResult.drops) {
+        const playerInv = stored.matchState.currentRound.powerUpInventory[drop.playerId];
+        if (playerInv) {
+          stored.matchState.currentRound.powerUpInventory[drop.playerId] = addToInventory(
+            playerInv,
+            drop.id
+          );
+        }
+      }
+    }
+
+    stored.scores[botId] = (stored.scores[botId] ?? 0) + scoreResult.points;
+
+    for (const drop of evalResult.drops) {
+      this.broadcastAll(
+        JSON.stringify({
+          type: "power_up_earned",
+          playerId: drop.playerId,
+          powerup: drop.id,
+          source: drop.source,
+        })
+      );
+    }
+
+    await this.saveRoom(stored);
+    await this.applyEffects(wordResult.effects, stored);
+    await this.maybeAutoConfirmNextRound();
+  }
+
+  private async maybeAutoConfirmNextRound(): Promise<void> {
+    const stored = await this.loadRoom();
+    if (!stored.botPlayerId || stored.matchState?.status !== "round_complete") return;
+    const ctx = stored.matchState.roundEndContext;
+    if (!ctx || ctx.nextRoundConfirmations.includes(stored.botPlayerId)) return;
+    await this.handleNextRoundRequest(stored.botPlayerId);
+  }
+
   private saveRoundHistoryIfEnded(stored: RoomStorage, prevRoundNumber: number): void {
     const newState = stored.matchState;
     if (!newState) return;
@@ -868,6 +1001,13 @@ export class GameRoom implements DurableObject {
         case "startTimer": {
           const mode = getModeConfig(stored.matchState?.gameMode ?? "classic");
           const round = stored.matchState?.currentRound;
+          // Bot turn: skip the full turn timer, schedule a short bot-move delay instead.
+          if (stored.botPlayerId && round?.currentPlayerId === stored.botPlayerId) {
+            const delay = 800 + Math.floor(Math.random() * 1200);
+            await this.setAlarm(stored, "bot_turn", Date.now() + delay);
+            stored.turnStartAt = Date.now();
+            break;
+          }
           const inDangerZone =
             this.dangerZoneEnabled &&
             (round?.chain.length ?? 0) >= DANGER_ZONE_CHAIN_THRESHOLD;
@@ -893,7 +1033,7 @@ export class GameRoom implements DurableObject {
           break;
         }
         case "stopTimer":
-          if (stored.alarmKind === "turn") {
+          if (stored.alarmKind === "turn" || stored.alarmKind === "bot_turn") {
             await this.clearAlarm(stored);
           }
           break;
@@ -906,14 +1046,17 @@ export class GameRoom implements DurableObject {
           }
           break;
         case "matchOver":
-          await persistMatch(this.env, {
-            player1Id: stored.playerIds[0] ?? "",
-            player2Id: stored.playerIds[1] ?? "",
-            winnerId: effect.winnerId,
-            roundWins: stored.matchState?.roundWins ?? {},
-            roundHistory: stored.roundHistory,
-            gameMode: stored.matchState?.gameMode ?? "classic",
-          });
+          // Skip persistence for bot matches — bot has no DB record and no ELO.
+          if (!stored.botPlayerId) {
+            await persistMatch(this.env, {
+              player1Id: stored.playerIds[0] ?? "",
+              player2Id: stored.playerIds[1] ?? "",
+              winnerId: effect.winnerId,
+              roundWins: stored.matchState?.roundWins ?? {},
+              roundHistory: stored.roundHistory,
+              gameMode: stored.matchState?.gameMode ?? "classic",
+            });
+          }
           break;
       }
     }

@@ -5,6 +5,7 @@ import { handleMatchmake } from "./routes/matchmake";
 import { handleMatches } from "./routes/matches";
 import { handleGoogleAuth, handleGoogleCallback } from "./routes/oauth";
 import { authenticate } from "./auth/middleware";
+import { isValidGameMode, type GameMode } from "./modules/gameModes";
 
 export interface Env {
   GAME_ROOM: DurableObjectNamespace;
@@ -47,6 +48,10 @@ export default {
       return handleMatchmake(request, env);
     }
 
+    if (url.pathname === "/api/rooms/vs-bot" && request.method === "POST") {
+      return handleVsBot(request, env);
+    }
+
     if (url.pathname.startsWith("/api/rooms")) {
       return handleRooms(request, env, url);
     }
@@ -63,6 +68,40 @@ function generateRoomSlug(): string {
     .replace(/\//g, "_")
     .replace(/=/g, "")
     .slice(0, 16);
+}
+
+async function handleVsBot(request: Request, env: Env): Promise<Response> {
+  const auth = await authenticate(request, env);
+  if (!auth) return new Response("Unauthorized", { status: 401 });
+
+  let mode: GameMode = "classic";
+  try {
+    const body = (await request.json()) as { mode?: unknown };
+    if (isValidGameMode(body.mode)) mode = body.mode;
+  } catch {
+    // No body — use classic
+  }
+
+  const slug = generateRoomSlug();
+  const id = env.GAME_ROOM.idFromName(slug);
+  const stub = env.GAME_ROOM.get(id);
+  const base = new URL(request.url);
+
+  const initUrl = new URL(base);
+  initUrl.pathname = "/init";
+  await stub.fetch(
+    new Request(initUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode }),
+    })
+  );
+
+  const addBotUrl = new URL(base);
+  addBotUrl.pathname = "/add-bot";
+  await stub.fetch(new Request(addBotUrl, { method: "POST" }));
+
+  return Response.json({ roomId: slug }, { status: 201 });
 }
 
 async function handleRooms(
