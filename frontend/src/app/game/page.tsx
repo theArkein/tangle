@@ -169,18 +169,6 @@ function GameContent() {
   const nextRoundStartedAtRef = useRef(0)
   const reactionIdRef = useRef(0)
 
-  // Detect soft keyboard open via visual viewport shrink
-  useEffect(() => {
-    const vv = window.visualViewport
-    if (!vv) return
-    const update = () => setKeyboardOpen(window.innerHeight - vv.height > 150)
-    vv.addEventListener('resize', update)
-    vv.addEventListener('scroll', update)
-    return () => {
-      vv.removeEventListener('resize', update)
-      vv.removeEventListener('scroll', update)
-    }
-  }, [])
 
   // Load current player ID
   useEffect(() => {
@@ -985,6 +973,8 @@ function GameContent() {
                 wsRef.current.send(JSON.stringify({ type: 'typing_update', partial: v }))
               }
             }}
+            onFocus={() => { if (navigator.maxTouchPoints > 0) setKeyboardOpen(true) }}
+            onBlur={() => setKeyboardOpen(false)}
             onKeyDown={e => { if (e.key === 'Enter') submitWord() }}
             disabled={!isMyTurn || submitting}
             placeholder={
