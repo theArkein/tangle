@@ -7,6 +7,7 @@ import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
 import WordPill from '@/components/ui/WordPill'
 import TimerBar from '@/components/ui/TimerBar'
+import { POWER_UP_LABELS, type PowerUpId } from '@/lib/powerups'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>
@@ -15,19 +16,6 @@ interface BeforeInstallPromptEvent extends Event {
 
 // ── Backend types (mirrored from src/modules/MatchStateMachine.ts) ───────────
 
-type PowerUpId =
-  | 'freeze'
-  | 'secondLife'
-  | 'letterBomb'
-  | 'block'
-  | 'swap'
-  | 'blind'
-  | 'shrink'
-  | 'rush'
-  | 'steal'
-  | 'peek'
-  | 'blitz'
-  | 'wildfire'
 type PowerUpInventory = Record<PowerUpId, number>
 type GameMode = 'classic' | 'speed_round'
 
@@ -124,21 +112,6 @@ const REACTION_OPTIONS: Array<{ key: string; emoji: string }> = [
   { key: 'clap', emoji: '👏' },
   { key: 'skull', emoji: '💀' },
 ]
-const POWER_UP_LABELS: Record<PowerUpId, { name: string; emoji: string }> = {
-  freeze: { name: 'Freeze', emoji: '❄️' },
-  secondLife: { name: '2nd Life', emoji: '💚' },
-  letterBomb: { name: 'Letter Bomb', emoji: '💣' },
-  block: { name: 'Block', emoji: '🛑' },
-  swap: { name: 'Swap', emoji: '🔀' },
-  blind: { name: 'Blind', emoji: '🙈' },
-  shrink: { name: 'Shrink', emoji: '🤏' },
-  rush: { name: 'Rush', emoji: '⚡' },
-  steal: { name: 'Steal', emoji: '🪝' },
-  peek: { name: 'Peek', emoji: '👁' },
-  blitz: { name: 'Blitz', emoji: '⚔️' },
-  wildfire: { name: 'Wildfire', emoji: '🔥' },
-}
-
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const S = {
