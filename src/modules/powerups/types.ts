@@ -36,6 +36,8 @@ export interface DropTriggers {
   rareLetterDropped: Record<PlayerId, boolean>;
   longWordDropped: Record<PlayerId, boolean>;
   chainLengthDropped: Record<PlayerId, boolean>;
+  // True once both players have received their Chaos drop on DZ entry this round.
+  dangerZoneDropped: boolean;
 }
 
 export interface PowerUpDrop {
@@ -81,5 +83,6 @@ export function emptyTriggers(player1Id: PlayerId, player2Id: PlayerId): DropTri
     rareLetterDropped: { [player1Id]: false, [player2Id]: false },
     longWordDropped: { [player1Id]: false, [player2Id]: false },
     chainLengthDropped: { [player1Id]: false, [player2Id]: false },
+    dangerZoneDropped: false,
   };
 }

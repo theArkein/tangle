@@ -35,6 +35,11 @@ import {
 import { FREEZE_DURATION_MS, RUSH_TIMER_FRACTION } from "../modules/powerups";
 import type { PowerUpId } from "../modules/powerups/types";
 import {
+  pickFromCategory,
+  DANGER_ZONE_CHAIN_THRESHOLD,
+  DANGER_ZONE_MULTIPLIER,
+} from "../modules/powerups/pools";
+import {
   getModeConfig,
   isValidGameMode,
   type GameMode,
@@ -42,6 +47,7 @@ import {
 
 const REMATCH_TIMEOUT_MS = 30_000;
 const NEXT_ROUND_TIMEOUT_MS = 30_000;
+const DANGER_ZONE_TIMER_MS = 5_000;
 const SEED_LETTERS = "abcdefghijklmnoprstw";
 
 type AlarmKind = "turn" | "rematch" | "next_round";
@@ -71,6 +77,10 @@ export class GameRoom implements DurableObject {
     private readonly env: Env
   ) {
     this.dictionary = new D1Dictionary(env.DB);
+  }
+
+  private get dangerZoneEnabled(): boolean {
+    return this.env.DANGER_ZONE_ENABLED === "true";
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -308,7 +318,13 @@ export class GameRoom implements DurableObject {
       return;
     }
 
-    const multiplier = getWildfireMultiplier(round.activeEffects);
+    const chainLengthAfter = round.chain.length + 1;
+    const isDangerZone =
+      this.dangerZoneEnabled && chainLengthAfter >= DANGER_ZONE_CHAIN_THRESHOLD;
+    // No-stack: DZ multiplier takes precedence over Wildfire (both are 3×).
+    const multiplier = isDangerZone
+      ? DANGER_ZONE_MULTIPLIER
+      : getWildfireMultiplier(round.activeEffects);
     const scoreResult = score(word, { multiplier });
     ws.send(
       JSON.stringify({
@@ -329,7 +345,6 @@ export class GameRoom implements DurableObject {
 
     const prevRoundScore = round.playerRoundScores[playerId] ?? 0;
     const newRoundScore = prevRoundScore + scoreResult.points;
-    const chainLengthAfter = round.chain.length + 1;
 
     const evalResult = evaluateDrops({
       playerId,
@@ -338,6 +353,7 @@ export class GameRoom implements DurableObject {
       breakdown: scoreResult.breakdown,
       triggers: round.dropTriggers,
       chainLength: chainLengthAfter,
+      isDangerZone,
     });
 
     // Consume single-turn effects on the player who just played.
@@ -379,6 +395,24 @@ export class GameRoom implements DurableObject {
             drop.id
           );
         }
+      }
+
+      // Danger Zone entry: award one Chaos drop to both players, once per round.
+      const enteringDangerZone =
+        isDangerZone && !stored.matchState.currentRound.dropTriggers.dangerZoneDropped;
+      if (enteringDangerZone) {
+        stored.matchState.currentRound.dropTriggers.dangerZoneDropped = true;
+        for (const pid of stored.playerIds) {
+          const def = pickFromCategory("chaos", Math.random);
+          if (def) {
+            const inv = stored.matchState.currentRound.powerUpInventory[pid];
+            if (inv) {
+              stored.matchState.currentRound.powerUpInventory[pid] = addToInventory(inv, def.id);
+            }
+            evalResult.drops.push({ playerId: pid, id: def.id, source: "danger_zone" as never });
+          }
+        }
+        this.broadcastAll(JSON.stringify({ type: "danger_zone_entered" }));
       }
     }
 
@@ -833,8 +867,11 @@ export class GameRoom implements DurableObject {
           break;
         case "startTimer": {
           const mode = getModeConfig(stored.matchState?.gameMode ?? "classic");
-          let timeoutMs = mode.turnTimeoutMs;
           const round = stored.matchState?.currentRound;
+          const inDangerZone =
+            this.dangerZoneEnabled &&
+            (round?.chain.length ?? 0) >= DANGER_ZONE_CHAIN_THRESHOLD;
+          let timeoutMs = inDangerZone ? DANGER_ZONE_TIMER_MS : mode.turnTimeoutMs;
           if (round) {
             // Freeze: cuts FREEZE_DURATION_MS off the affected player's turn.
             const freezeIdx = round.activeEffects.findIndex(

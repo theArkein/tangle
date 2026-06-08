@@ -89,6 +89,7 @@ type ServerMsg =
   | { type: 'rematch_pending' }
   | { type: 'rematch_timeout' }
   | { type: 'power_up_earned'; playerId: string; powerup: PowerUpId; source: string }
+  | { type: 'danger_zone_entered' }
   | { type: 'power_up_activated'; powerup: PowerUpId; byPlayerId: string; targetPlayerId: string | null; word?: string; points?: number }
   | { type: 'second_life_consumed'; playerId: string }
   | { type: 'reaction'; fromPlayerId: string; reaction: string }
@@ -247,6 +248,12 @@ function GameContent() {
         setTimeout(() => {
           setReactionFeed(prev => prev.filter(r => r.id !== id))
         }, 3000)
+        return
+      }
+
+      if (msg.type === 'danger_zone_entered') {
+        setFeedback({ ok: true, text: 'DANGER ZONE — 3× scoring, 5s timer!' })
+        setTimeout(() => setFeedback(null), 3000)
         return
       }
 
@@ -654,8 +661,9 @@ function GameContent() {
   const swapPending = round.activeEffects.find(e => e.kind === 'swapPending' && e.byPlayerId === myId)
   const myBlitzClaimed = round.activeEffects.find(e => e.kind === 'blitzClaimed' && e.byPlayerId === myId)
   const peekActive = round.activeEffects.find(e => e.kind === 'peek' && e.forPlayerId === myId)
+  const inDangerZone = round.chain.length >= 20
   const timerPct = (timeLeft / modeCfg.turnSeconds) * 100
-  const timerUrgent = timeLeft <= 5
+  const timerUrgent = timeLeft <= 5 || inDangerZone
   const lastWord = round.chain[round.chain.length - 1]
   const nextSeed = lastWord ? lastWord.slice(-1).toUpperCase() : round.seedLetter.toUpperCase()
 
@@ -731,6 +739,13 @@ function GameContent() {
       </div>
 
       {/* Letter Bomb active banner */}
+      {/* Danger Zone banner */}
+      {inDangerZone && (
+        <div style={{ background: 'var(--danger-zone-bg)', borderBottom: '1px solid var(--danger-zone)', padding: '8px 14px', fontSize: '12px', color: 'var(--danger-zone)', textAlign: 'center', flexShrink: 0, fontWeight: 700, letterSpacing: '0.04em' }}>
+          DANGER ZONE — 3× scoring · 5s timer
+        </div>
+      )}
+
       {myLetterBomb && myLetterBomb.kind === 'letterBomb' && (
         <div style={{ background: 'var(--accent-warm-faint)', borderBottom: '1px solid var(--accent-warm-light)', padding: '8px 14px', fontSize: '12px', color: 'var(--accent-warm-muted)', textAlign: 'center', flexShrink: 0 }}>
           💣 Letter Bomb active — your next word must contain <strong>{myLetterBomb.requiredLetter}</strong>

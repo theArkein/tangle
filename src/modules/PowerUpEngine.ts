@@ -45,6 +45,7 @@ export interface EvaluateDropsInput {
   breakdown: ScoreBreakdown;
   triggers: DropTriggers;
   chainLength?: number;
+  isDangerZone?: boolean;
   rng?: () => number;
 }
 
@@ -58,6 +59,7 @@ export interface EvaluateDropsResult {
 export function evaluateDrops(input: EvaluateDropsInput): EvaluateDropsResult {
   const { playerId, prevRoundScore, newRoundScore, breakdown, triggers } = input;
   const chainLength = input.chainLength ?? 0;
+  const isDangerZone = input.isDangerZone ?? false;
   const rng = input.rng ?? Math.random;
 
   const drops: PowerUpDrop[] = [];
@@ -66,18 +68,22 @@ export function evaluateDrops(input: EvaluateDropsInput): EvaluateDropsResult {
     rareLetterDropped: { ...triggers.rareLetterDropped },
     longWordDropped: { ...triggers.longWordDropped },
     chainLengthDropped: { ...triggers.chainLengthDropped },
+    dangerZoneDropped: triggers.dangerZoneDropped,
   };
 
-  // 1) Score threshold crossings (can be multiple from a single word).
-  const prevThreshold = Math.floor(prevRoundScore / SCORE_THRESHOLD_POINTS);
-  const newThreshold = Math.floor(newRoundScore / SCORE_THRESHOLD_POINTS);
-  const crossings = Math.max(0, newThreshold - prevThreshold);
-  for (let i = 0; i < crossings; i++) {
-    const def = pickFromCategory(TRIGGER_CATEGORY.score_threshold, rng);
-    if (def) drops.push({ playerId, id: def.id, source: "score_threshold" });
-  }
-  if (crossings > 0) {
-    nextTriggers.thresholdsCrossed[playerId] = newThreshold;
+  // 1) Score threshold crossings — suppressed in the Danger Zone to prevent
+  //    power-up flooding from the 3× multiplier accelerating every threshold.
+  if (!isDangerZone) {
+    const prevThreshold = Math.floor(prevRoundScore / SCORE_THRESHOLD_POINTS);
+    const newThreshold = Math.floor(newRoundScore / SCORE_THRESHOLD_POINTS);
+    const crossings = Math.max(0, newThreshold - prevThreshold);
+    for (let i = 0; i < crossings; i++) {
+      const def = pickFromCategory(TRIGGER_CATEGORY.score_threshold, rng);
+      if (def) drops.push({ playerId, id: def.id, source: "score_threshold" });
+    }
+    if (crossings > 0) {
+      nextTriggers.thresholdsCrossed[playerId] = newThreshold;
+    }
   }
 
   // 2) First rare-letter word in the round (once per player).
