@@ -662,20 +662,38 @@ function GameContent() {
   const emptyInv: PowerUpInventory = { freeze: 0, secondLife: 0, letterBomb: 0, block: 0, swap: 0, blind: 0, shrink: 0, rush: 0, steal: 0, peek: 0, blitz: 0, wildfire: 0 }
   const myInventory: PowerUpInventory = round.powerUpInventory[myId] ?? emptyInv
   const opponentInventory: PowerUpInventory = round.powerUpInventory[opponentId] ?? emptyInv
-  const myLetterBomb = round.activeEffects.find(e => e.kind === 'letterBomb' && e.onPlayerId === myId)
-  const opponentLetterBomb = round.activeEffects.find(e => e.kind === 'letterBomb' && e.onPlayerId === opponentId)
-  const myShrink = round.activeEffects.find(e => e.kind === 'shrink' && e.onPlayerId === myId)
-  const myRush = round.activeEffects.find(e => e.kind === 'rush' && e.onPlayerId === myId)
   const blindOnMe = round.activeEffects.find(e => e.kind === 'blind' && e.onPlayerId === myId)
-  const wildfire = round.activeEffects.find(e => e.kind === 'wildfire')
   const swapPending = round.activeEffects.find(e => e.kind === 'swapPending' && e.byPlayerId === myId)
-  const myBlitzClaimed = round.activeEffects.find(e => e.kind === 'blitzClaimed' && e.byPlayerId === myId)
-  const peekActive = round.activeEffects.find(e => e.kind === 'peek' && e.forPlayerId === myId)
   const inDangerZone = round.chain.length >= 20
   const timerPct = (timeLeft / modeCfg.turnSeconds) * 100
   const timerUrgent = timeLeft <= 5 || inDangerZone
   const lastWord = round.chain[round.chain.length - 1]
   const nextSeed = lastWord ? lastWord.slice(-1).toUpperCase() : round.seedLetter.toUpperCase()
+
+  const myRoundScore = round.playerRoundScores[myId] ?? 0
+  const oppRoundScore = round.playerRoundScores[opponentId] ?? 0
+
+  const oppEffectChips: string[] = round.activeEffects.flatMap(e => {
+    if (e.kind === 'letterBomb' && e.onPlayerId === opponentId) return [`💣 ${e.requiredLetter}`]
+    if (e.kind === 'shrink'     && e.onPlayerId === opponentId) return [`🤏 ≤${e.maxLength}`]
+    if (e.kind === 'rush'       && e.onPlayerId === opponentId) return ['⚡ Rush']
+    if (e.kind === 'blind'      && e.onPlayerId === opponentId) return [`🙈 ${e.turnsRemaining}T`]
+    if (e.kind === 'freeze'     && e.onPlayerId === opponentId) return ['❄️ Frozen']
+    return []
+  })
+
+  const myEffectChips: string[] = round.activeEffects.flatMap(e => {
+    if (e.kind === 'letterBomb'    && e.onPlayerId === myId)    return [`💣 ${e.requiredLetter}`]
+    if (e.kind === 'shrink'        && e.onPlayerId === myId)    return [`🤏 ≤${e.maxLength}`]
+    if (e.kind === 'rush'          && e.onPlayerId === myId)    return ['⚡ Rush']
+    if (e.kind === 'blind'         && e.onPlayerId === myId)    return ['🙈 Hidden']
+    if (e.kind === 'freeze'        && e.onPlayerId === myId)    return ['❄️ Frozen']
+    if (e.kind === 'secondLifeArmed' && e.forPlayerId === myId) return ['💚 Armed']
+    if (e.kind === 'peek'          && e.forPlayerId === myId)   return [`👁 ${opponentTyping || '…'}`]
+    if (e.kind === 'blitzClaimed'  && e.byPlayerId === myId)    return ['⚔️ Blitz x2']
+    if (e.kind === 'wildfire')                                  return [`🔥 3×·${e.turnsRemaining}T`]
+    return []
+  })
 
   return (
     <div style={S.page}>
@@ -721,219 +739,146 @@ function GameContent() {
         <span style={S.scoreText}>{myWins} – {oppWins}</span>
       </div>
 
-      {/* Player row */}
-      <div style={{ background: 'var(--n0)', borderBottom: '1px solid var(--n100)', padding: '10px 14px', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-          <Avatar name="You" variant="p1" size={28} />
-          <div>
-            <div style={{ fontSize: '12px', fontWeight: 500, fontFamily: 'var(--font-heading)', color: 'var(--n800)' }}>You</div>
-            <div style={{ display: 'flex', gap: '2px', marginTop: '3px' }}>
-              {Array.from({ length: modeCfg.maxFaults }).map((_, i) => (
-                <span key={i} style={{ display: 'block', width: '5px', height: '5px', borderRadius: '50%', background: i < myFaults ? 'var(--danger)' : 'var(--n200)' }} />
-              ))}
-            </div>
-          </div>
-        </div>
-        <span style={{ fontSize: '11px', color: 'var(--n300)', fontWeight: 500 }}>VS</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, justifyContent: 'flex-end' }}>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '12px', fontWeight: 500, fontFamily: 'var(--font-heading)', color: 'var(--n800)' }}>Opponent</div>
-            <div style={{ display: 'flex', gap: '2px', marginTop: '3px', justifyContent: 'flex-end' }}>
-              {Array.from({ length: modeCfg.maxFaults }).map((_, i) => (
-                <span key={i} style={{ display: 'block', width: '5px', height: '5px', borderRadius: '50%', background: i < oppFaults ? 'var(--danger)' : 'var(--n200)' }} />
-              ))}
-            </div>
-          </div>
-          <Avatar name="?" variant="p2" size={28} />
-        </div>
-      </div>
-
-      {/* Letter Bomb active banner */}
-      {/* Danger Zone banner */}
+      {/* Danger Zone strip */}
       {inDangerZone && (
-        <div style={{ background: 'var(--danger-zone-bg)', borderBottom: '1px solid var(--danger-zone)', padding: '8px 14px', fontSize: '12px', color: 'var(--danger-zone)', textAlign: 'center', flexShrink: 0, fontWeight: 700, letterSpacing: '0.04em' }}>
+        <div style={{ background: 'var(--danger-zone-bg)', borderBottom: '1px solid var(--danger-zone)', padding: '6px 14px', fontSize: '11px', color: 'var(--danger-zone)', textAlign: 'center', flexShrink: 0, fontWeight: 700, letterSpacing: '0.04em' }}>
           DANGER ZONE — 3× scoring · 5s timer
         </div>
       )}
 
-      {myLetterBomb && myLetterBomb.kind === 'letterBomb' && (
-        <div style={{ background: 'var(--accent-warm-faint)', borderBottom: '1px solid var(--accent-warm-light)', padding: '8px 14px', fontSize: '12px', color: 'var(--accent-warm-muted)', textAlign: 'center', flexShrink: 0 }}>
-          💣 Letter Bomb active — your next word must contain <strong>{myLetterBomb.requiredLetter}</strong>
-        </div>
-      )}
-      {opponentLetterBomb && opponentLetterBomb.kind === 'letterBomb' && (
-        <div style={{ background: 'var(--n50)', borderBottom: '1px solid var(--n100)', padding: '6px 14px', fontSize: '11px', color: 'var(--n500)', textAlign: 'center', flexShrink: 0 }}>
-          Opponent must use <strong>{opponentLetterBomb.requiredLetter}</strong>
-        </div>
-      )}
+      {/* ── Main: opponent card / chain / player card ── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px 14px', gap: '8px', minHeight: 0 }}>
 
-      {/* Shrink banner */}
-      {myShrink && myShrink.kind === 'shrink' && (
-        <div style={{ background: 'var(--accent-warm-faint)', borderBottom: '1px solid var(--accent-warm-light)', padding: '8px 14px', fontSize: '12px', color: 'var(--accent-warm-muted)', textAlign: 'center', flexShrink: 0 }}>
-          🤏 Shrink — your next word must be ≤ <strong>{myShrink.maxLength}</strong> letters
-        </div>
-      )}
-
-      {/* Rush banner */}
-      {myRush && myRush.kind === 'rush' && (
-        <div style={{ background: 'var(--accent-warm-faint)', borderBottom: '1px solid var(--accent-warm-light)', padding: '8px 14px', fontSize: '12px', color: 'var(--accent-warm-muted)', textAlign: 'center', flexShrink: 0 }}>
-          ⚡ Rush — your next turn is half-length
-        </div>
-      )}
-
-      {/* Wildfire banner */}
-      {wildfire && wildfire.kind === 'wildfire' && (
-        <div style={{ background: '#ffeb99', borderBottom: '1px solid #f5d76e', padding: '8px 14px', fontSize: '12px', color: '#7d5a00', textAlign: 'center', flexShrink: 0, fontWeight: 600 }}>
-          🔥 Wildfire — {wildfire.multiplier}× scoring · {wildfire.turnsRemaining} turn{wildfire.turnsRemaining === 1 ? '' : 's'} left
-        </div>
-      )}
-
-      {/* Blitz claimed indicator */}
-      {myBlitzClaimed && (
-        <div style={{ background: 'var(--accent-warm-faint)', borderBottom: '1px solid var(--accent-warm-light)', padding: '6px 14px', fontSize: '11px', color: 'var(--accent-warm-muted)', textAlign: 'center', flexShrink: 0 }}>
-          ⚔️ Blitz claimed — you&apos;ll get another turn after this word
-        </div>
-      )}
-
-      {/* Peek active */}
-      {peekActive && (
-        <div style={{ background: '#e8f5e9', borderBottom: '1px solid #c8e6c9', padding: '6px 14px', fontSize: '11px', color: '#2e7d32', textAlign: 'center', flexShrink: 0 }}>
-          👁 Peek — opponent typing: <strong style={{ fontFamily: 'var(--font-mono)' }}>{opponentTyping || '…'}</strong>
-        </div>
-      )}
-
-      {/* Swap letter picker */}
-      {swapPending && (
-        <div style={{ background: 'var(--n0)', borderBottom: '1px solid var(--n200)', padding: '10px 14px', flexShrink: 0 }}>
-          <div style={{ fontSize: '12px', color: 'var(--n700)', marginBottom: 6, fontWeight: 600 }}>
-            🔀 Swap — pick a new chain letter:
-          </div>
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-            {'abcdefghijklmnopqrstuvwxyz'.split('').map(letter => (
-              <button
-                key={letter}
-                onClick={() => {
-                  if (wsRef.current?.readyState === WebSocket.OPEN) {
-                    wsRef.current.send(JSON.stringify({ type: 'swap_choose_letter', letter }))
-                  }
-                }}
-                style={{
-                  width: 26, height: 26, borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--n200)', background: 'var(--n0)',
-                  fontFamily: 'var(--font-mono)', fontSize: 12,
-                  cursor: 'pointer', textTransform: 'uppercase',
-                }}
-              >{letter}</button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Word chain */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 14px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignContent: 'center', justifyContent: 'center' }}>
-        {blindOnMe && blindOnMe.kind === 'blind' ? (
-          <div style={{ textAlign: 'center', width: '100%', color: 'var(--n400)' }}>
-            <div style={{ fontSize: 48, marginBottom: 8 }}>🙈</div>
-            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Chain hidden by Blind</div>
-            <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)' }}>{blindOnMe.turnsRemaining} turn{blindOnMe.turnsRemaining === 1 ? '' : 's'} remaining</div>
-          </div>
-        ) : round.chain.length === 0 ? (
-          <div style={{ textAlign: 'center', width: '100%' }}>
-            <div style={{ ...S.sectionLabel, marginBottom: '10px' }}>Start with</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '56px', color: 'var(--n900)', letterSpacing: '-1px' }}>
-              {round.seedLetter.toUpperCase()}
+        {/* Opponent card */}
+        <div style={{ background: 'var(--n0)', border: `1.5px solid ${!isMyTurn ? 'var(--n500)' : 'var(--n200)'}`, borderRadius: 'var(--radius-xl)', padding: '10px 12px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+            <Avatar name="?" variant="p2" size={28} />
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n800)' }}>Opponent</span>
+                {!isMyTurn && <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.06em', background: 'var(--n900)', color: 'var(--n0)', padding: '1px 5px', borderRadius: '99px' }}>TURN</span>}
+              </div>
+              <div style={{ display: 'flex', gap: '2px', marginTop: '3px' }}>
+                {Array.from({ length: modeCfg.maxFaults }).map((_, i) => (
+                  <span key={i} style={{ display: 'block', width: '5px', height: '5px', borderRadius: '50%', background: i < oppFaults ? 'var(--danger)' : 'var(--n200)' }} />
+                ))}
+              </div>
             </div>
+            <span style={{ fontSize: '15px', fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--n900)' }}>
+              {oppRoundScore}<span style={{ fontSize: '10px', color: 'var(--n400)', fontWeight: 400 }}> pts</span>
+            </span>
           </div>
-        ) : (
-          round.chain.map((word, i) => {
-            const isOwn = matchState.player1Id === myId
-              ? i % 2 === 0
-              : i % 2 !== 0
-            const isLong = word.length >= 8
-            return (
-              <span
-                key={i}
-                style={isLong ? { display: 'inline-flex', animation: 'wordShimmer 1.6s ease-out' } : undefined}
-              >
-                <WordPill
-                  word={word}
-                  variant={isOwn ? 'player1' : 'player2'}
-                  size="sm"
-                />
-              </span>
-            )
-          })
-        )}
-        <style>{`
-          @keyframes wordShimmer { 0% { filter: brightness(1.6) saturate(1.5); transform: scale(1.05); } 100% { filter: brightness(1) saturate(1); transform: scale(1); } }
-          @keyframes earnGlow { 0% { box-shadow: 0 0 0 2px #4caf50; } 60% { box-shadow: 0 0 8px 4px #4caf5088; } 100% { box-shadow: 0 0 0 2px #4caf50; } }
-          @keyframes activateFlash { 0% { background: var(--accent-warm-faint); } 50% { background: #ffe09a; } 100% { background: var(--n0); } }
-        `}</style>
-      </div>
-
-      {/* Bottom panel */}
-      <div style={S.bottomPanel}>
-        {/* Power-up HUD */}
-        {gameMode === 'classic' && (
-          <div style={{ marginBottom: '10px' }}>
-            <div style={{ ...S.sectionLabel, marginBottom: '4px' }}>Opponent</div>
-            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '8px' }}>
+          {oppEffectChips.length > 0 && (
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '6px' }}>
+              {oppEffectChips.map((chip, i) => (
+                <span key={i} style={{ fontSize: '11px', background: 'var(--accent-warm-faint)', color: 'var(--accent-warm-muted)', padding: '2px 7px', borderRadius: '99px', fontWeight: 500 }}>{chip}</span>
+              ))}
+            </div>
+          )}
+          {gameMode === 'classic' && (
+            <div style={{ display: 'flex', gap: '3px' }}>
               {(Object.keys(POWER_UP_LABELS) as PowerUpId[]).map((id) => {
                 const count = opponentInventory[id] ?? 0
                 const hl = oppHighlights[id]
                 return (
-                  <div
-                    key={id}
-                    title={POWER_UP_LABELS[id].name}
-                    style={{
-                      width: 40, height: 44,
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
-                      border: hl === 'earned' ? '1px solid #4caf50' : hl === 'activated' ? '1px solid var(--accent-warm)' : '1px solid var(--n200)',
-                      borderRadius: 'var(--radius-md)',
-                      background: 'var(--n0)',
-                      opacity: count === 0 ? 0.3 : 1,
-                      filter: count === 0 ? 'grayscale(1)' : 'none',
-                      animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none',
-                    }}
-                  >
-                    <span style={{ fontSize: 18 }}>{POWER_UP_LABELS[id].emoji}</span>
-                    <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--n500)', visibility: count > 0 ? 'visible' : 'hidden' }}>×{count}</span>
+                  <div key={id} title={POWER_UP_LABELS[id].name} style={{ flex: 1, minWidth: 0, height: 36, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, border: hl === 'earned' ? '1px solid #4caf50' : hl === 'activated' ? '1px solid var(--accent-warm)' : '1px solid var(--n200)', borderRadius: 'var(--radius-sm)', background: 'var(--n0)', opacity: count === 0 ? 0.25 : 1, filter: count === 0 ? 'grayscale(1)' : 'none', animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
+                    <span style={{ fontSize: 14 }}>{POWER_UP_LABELS[id].emoji}</span>
+                    <span style={{ fontSize: 8, fontFamily: 'var(--font-mono)', color: 'var(--n500)', visibility: count > 0 ? 'visible' : 'hidden', lineHeight: 1 }}>×{count}</span>
                   </div>
                 )
               })}
             </div>
-            <div style={{ ...S.sectionLabel, marginBottom: '4px' }}>You</div>
-            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+          )}
+        </div>
+
+        {/* Word chain */}
+        <div style={{ flex: 1, minHeight: 60, overflowY: 'auto', display: 'flex', flexWrap: 'wrap', gap: '8px', alignContent: 'center', justifyContent: 'center', padding: '4px 0' }}>
+          {blindOnMe && blindOnMe.kind === 'blind' ? (
+            <div style={{ textAlign: 'center', width: '100%', color: 'var(--n400)' }}>
+              <div style={{ fontSize: 36, marginBottom: 6 }}>🙈</div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Chain hidden</div>
+              <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)' }}>{blindOnMe.turnsRemaining}T left</div>
+            </div>
+          ) : round.chain.length === 0 ? (
+            <div style={{ textAlign: 'center', width: '100%' }}>
+              <div style={{ ...S.sectionLabel, marginBottom: '8px' }}>Start with</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '48px', color: 'var(--n900)', letterSpacing: '-1px' }}>{round.seedLetter.toUpperCase()}</div>
+            </div>
+          ) : (
+            round.chain.map((word, i) => {
+              const isOwn = matchState.player1Id === myId ? i % 2 === 0 : i % 2 !== 0
+              const isLong = word.length >= 8
+              return (
+                <span key={i} style={isLong ? { display: 'inline-flex', animation: 'wordShimmer 1.6s ease-out' } : undefined}>
+                  <WordPill word={word} variant={isOwn ? 'player1' : 'player2'} size="sm" />
+                </span>
+              )
+            })
+          )}
+          <style>{`
+            @keyframes wordShimmer { 0% { filter: brightness(1.6) saturate(1.5); transform: scale(1.05); } 100% { filter: brightness(1) saturate(1); transform: scale(1); } }
+            @keyframes earnGlow { 0% { box-shadow: 0 0 0 2px #4caf50; } 60% { box-shadow: 0 0 8px 4px #4caf5088; } 100% { box-shadow: 0 0 0 2px #4caf50; } }
+            @keyframes activateFlash { 0% { background: var(--accent-warm-faint); } 50% { background: #ffe09a; } 100% { background: var(--n0); } }
+          `}</style>
+        </div>
+
+        {/* Player card */}
+        <div style={{ background: 'var(--n0)', border: `1.5px solid ${isMyTurn ? 'var(--success)' : 'var(--n200)'}`, borderRadius: 'var(--radius-xl)', padding: '10px 12px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+            <Avatar name="You" variant="p1" size={28} />
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n800)' }}>You</span>
+                {isMyTurn && <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.06em', background: 'var(--success)', color: 'var(--n0)', padding: '1px 5px', borderRadius: '99px' }}>TURN</span>}
+              </div>
+              <div style={{ display: 'flex', gap: '2px', marginTop: '3px' }}>
+                {Array.from({ length: modeCfg.maxFaults }).map((_, i) => (
+                  <span key={i} style={{ display: 'block', width: '5px', height: '5px', borderRadius: '50%', background: i < myFaults ? 'var(--danger)' : 'var(--n200)' }} />
+                ))}
+              </div>
+            </div>
+            <span style={{ fontSize: '15px', fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--n900)' }}>
+              {myRoundScore}<span style={{ fontSize: '10px', color: 'var(--n400)', fontWeight: 400 }}> pts</span>
+            </span>
+          </div>
+          {myEffectChips.length > 0 && (
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '6px' }}>
+              {myEffectChips.map((chip, i) => (
+                <span key={i} style={{ fontSize: '11px', background: 'var(--accent-warm-faint)', color: 'var(--accent-warm-muted)', padding: '2px 7px', borderRadius: '99px', fontWeight: 500 }}>{chip}</span>
+              ))}
+            </div>
+          )}
+          {gameMode === 'classic' && (
+            <div style={{ display: 'flex', gap: '3px' }}>
               {(Object.keys(POWER_UP_LABELS) as PowerUpId[]).map((id) => {
                 const count = myInventory[id] ?? 0
                 const hl = myHighlights[id]
                 const turnLocked = !isMyTurn && id !== 'secondLife' && id !== 'block'
                 return (
-                  <button
-                    key={id}
-                    onClick={() => activatePowerUp(id)}
-                    disabled={count === 0 || turnLocked}
-                    title={POWER_UP_LABELS[id].name}
-                    style={{
-                      width: 40, height: 44, padding: 0,
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
-                      border: hl === 'earned' ? '1px solid #4caf50' : hl === 'activated' ? '1px solid var(--accent-warm)' : '1px solid var(--n200)',
-                      borderRadius: 'var(--radius-md)',
-                      background: 'var(--n0)',
-                      cursor: count > 0 && !turnLocked ? 'pointer' : 'default',
-                      opacity: count === 0 ? 0.3 : (turnLocked ? 0.45 : 1),
-                      filter: count === 0 ? 'grayscale(1)' : 'none',
-                      animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none',
-                    }}
-                  >
-                    <span style={{ fontSize: 18 }}>{POWER_UP_LABELS[id].emoji}</span>
-                    <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--n500)', visibility: count > 0 ? 'visible' : 'hidden' }}>×{count}</span>
+                  <button key={id} onClick={() => activatePowerUp(id)} disabled={count === 0 || turnLocked} title={POWER_UP_LABELS[id].name} style={{ flex: 1, minWidth: 0, height: 36, padding: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, border: hl === 'earned' ? '1px solid #4caf50' : hl === 'activated' ? '1px solid var(--accent-warm)' : '1px solid var(--n200)', borderRadius: 'var(--radius-sm)', background: 'var(--n0)', cursor: count > 0 && !turnLocked ? 'pointer' : 'default', opacity: count === 0 ? 0.25 : (turnLocked ? 0.45 : 1), filter: count === 0 ? 'grayscale(1)' : 'none', animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
+                    <span style={{ fontSize: 14 }}>{POWER_UP_LABELS[id].emoji}</span>
+                    <span style={{ fontSize: 8, fontFamily: 'var(--font-mono)', color: 'var(--n500)', visibility: count > 0 ? 'visible' : 'hidden', lineHeight: 1 }}>×{count}</span>
                   </button>
                 )
               })}
             </div>
-          </div>
-        )}
+          )}
+          {swapPending && (
+            <div style={{ marginTop: '8px' }}>
+              <div style={{ fontSize: '11px', color: 'var(--n700)', marginBottom: 4, fontWeight: 600 }}>🔀 Pick new chain letter:</div>
+              <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                {'abcdefghijklmnopqrstuvwxyz'.split('').map(letter => (
+                  <button key={letter} onClick={() => { if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify({ type: 'swap_choose_letter', letter })) }} style={{ width: 24, height: 24, borderRadius: 'var(--radius-sm)', border: '1px solid var(--n200)', background: 'var(--n0)', fontFamily: 'var(--font-mono)', fontSize: 11, cursor: 'pointer', textTransform: 'uppercase' }}>{letter}</button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+      </div>
+
+      {/* Bottom strip */}
+      <div style={S.bottomPanel}>
 
         {/* Reaction bar */}
         <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', justifyContent: 'center' }}>
