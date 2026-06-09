@@ -24,7 +24,7 @@ export default function GameKeyboard({ onKey, disabled }: GameKeyboardProps) {
     setPressedKey(k)
     play('tap')
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate(8)
+      navigator.vibrate(30)
     }
     if (k === '⌫') onKey('BACKSPACE')
     else if (k === '↵') onKey('ENTER')
