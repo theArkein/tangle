@@ -150,6 +150,7 @@ function GameContent() {
   const [timeLeft, setTimeLeft] = useState(60)
   const [nextRoundTimeLeft, setNextRoundTimeLeft] = useState(NEXT_ROUND_SECONDS)
   const [roundHistory, setRoundHistory] = useState<RoundHistoryEntry[]>([])
+  const [gameScores, setGameScores] = useState<Record<string, number>>({})
   const [rematchState, setRematchState] = useState<'idle' | 'pending'>('idle')
   const [showLinkPrompt, setShowLinkPrompt] = useState(false)
   const [showInstallPrompt, setShowInstallPrompt] = useState(false)
@@ -354,6 +355,7 @@ function GameContent() {
 
         prevStateRef.current = state
         setRoundHistory(msg.roundHistory ?? [])
+        setGameScores(msg.scores ?? {})
         setWaitingCount(null)
         setMatchState(state)
         setSubmitting(false)
@@ -783,6 +785,8 @@ function GameContent() {
 
   const myRoundScore = round.playerRoundScores[myId] ?? 0
   const oppRoundScore = round.playerRoundScores[opponentId] ?? 0
+  const myGameScore = gameScores[myId] ?? 0
+  const oppGameScore = gameScores[opponentId] ?? 0
 
   const oppEffectChips: string[] = round.activeEffects.flatMap(e => {
     if (e.kind === 'letterBomb' && e.onPlayerId === opponentId) return [`💣 ${e.requiredLetter}`]
@@ -807,7 +811,7 @@ function GameContent() {
   })
 
   return (
-    <div style={S.page}>
+    <div id="game-root" style={S.page}>
       {/* Mute toggle */}
       <button
         onClick={() => setMuted(!muted)}
@@ -829,7 +833,6 @@ function GameContent() {
           <div style={{ fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n900)' }}>{modeCfg.displayName}</div>
           <div style={{ fontSize: '11px', color: 'var(--n400)', fontFamily: 'var(--font-mono)' }}>Round {round.roundNumber}</div>
         </div>
-        <span style={S.scoreText}>{myWins} – {oppWins}</span>
       </div>
 
       {/* Danger Zone strip */}
@@ -842,7 +845,7 @@ function GameContent() {
       {/* Toast overlay */}
       {activeToast && (
         <div style={{ position: 'fixed', top: 12, left: 0, right: 0, zIndex: 60, pointerEvents: 'none', display: 'flex', justifyContent: 'center', padding: '0 14px' }}>
-          <div style={{ pointerEvents: 'auto', width: '100%', maxWidth: 340 }}>
+          <div style={{ pointerEvents: 'auto', width: '100%', maxWidth: 300 }}>
             <GameToast
               key={activeToast.id}
               variant={activeToast.variant}
@@ -862,24 +865,18 @@ function GameContent() {
             {isMyTurn && <div style={{ position: 'absolute', bottom: -2, right: -2, width: 9, height: 9, borderRadius: '50%', background: 'var(--p1)', border: '2px solid var(--n0)' }} />}
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <p style={{ fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n800)', margin: '0 0 3px' }}>
+            <p style={{ fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n800)', margin: '0 0 2px' }}>
               You {isMyTurn && <span style={{ color: 'var(--p1)', fontWeight: 500 }}>· your turn</span>}
             </p>
-            <div style={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {(Object.keys(POWER_UP_LABELS) as PowerUpId[]).map(id => {
-                const count = myInventory[id] ?? 0
-                const hl = myHighlights[id]
-                return (
-                  <span key={id} title={`${POWER_UP_LABELS[id].name}${count > 0 ? ` ×${count}` : ''}`}
-                    style={{ fontSize: 13, opacity: count > 0 ? 1 : 0.15, lineHeight: 1.2, position: 'relative', animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
-                    {POWER_UP_LABELS[id].emoji}
-                    {count > 1 && <sup style={{ fontSize: 7, fontFamily: 'var(--font-mono)', color: 'var(--p1)', fontWeight: 700 }}>{count}</sup>}
-                  </span>
-                )
-              })}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, margin: '0 0 3px' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--p1)' }}>{myRoundScore}</span>
+              <span style={{ fontSize: 9, color: 'var(--n400)', fontFamily: 'var(--font-mono)' }}>round</span>
+              <span style={{ fontSize: 9, color: 'var(--n300)' }}>·</span>
+              <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--n700)' }}>{myGameScore}</span>
+              <span style={{ fontSize: 9, color: 'var(--n400)', fontFamily: 'var(--font-mono)' }}>total</span>
             </div>
             {myEffectChips.length > 0 && (
-              <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginTop: 3 }}>
+              <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
                 {myEffectChips.map((chip, i) => (
                   <span key={i} style={{ fontSize: 9, background: 'var(--accent-warm-faint)', color: 'var(--accent-warm-muted)', padding: '1px 5px', borderRadius: '99px', fontWeight: 500 }}>{chip}</span>
                 ))}
@@ -888,29 +885,26 @@ function GameContent() {
           </div>
         </div>
 
-        <span style={{ fontSize: 10, color: 'var(--n300)', fontFamily: 'var(--font-mono)', fontWeight: 600, flexShrink: 0 }}>VS</span>
+        <div style={{ textAlign: 'center', flexShrink: 0 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--n800)', lineHeight: 1 }}>{myWins} – {oppWins}</div>
+          <div style={{ fontSize: 9, color: 'var(--n400)', letterSpacing: '0.06em', fontWeight: 600, marginTop: 2 }}>ROUNDS</div>
+        </div>
 
         {/* Opponent */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1, justifyContent: 'flex-end', minWidth: 0 }}>
           <div style={{ minWidth: 0, flex: 1, textAlign: 'right' }}>
-            <p style={{ fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n800)', margin: '0 0 3px' }}>
+            <p style={{ fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n800)', margin: '0 0 2px' }}>
               {!isMyTurn && <span style={{ color: 'var(--p2)', fontWeight: 500 }}>{opponentTyping ? 'typing… · ' : 'thinking… · '}</span>}{opponentName}
             </p>
-            <div style={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              {(Object.keys(POWER_UP_LABELS) as PowerUpId[]).map(id => {
-                const count = opponentInventory[id] ?? 0
-                const hl = oppHighlights[id]
-                return (
-                  <span key={id} title={`${POWER_UP_LABELS[id].name}${count > 0 ? ` ×${count}` : ''}`}
-                    style={{ fontSize: 13, opacity: count > 0 ? 1 : 0.15, lineHeight: 1.2, position: 'relative', animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
-                    {POWER_UP_LABELS[id].emoji}
-                    {count > 1 && <sup style={{ fontSize: 7, fontFamily: 'var(--font-mono)', color: 'var(--p2)', fontWeight: 700 }}>{count}</sup>}
-                  </span>
-                )
-              })}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, margin: '0 0 3px', justifyContent: 'flex-end' }}>
+              <span style={{ fontSize: 9, color: 'var(--n400)', fontFamily: 'var(--font-mono)' }}>total</span>
+              <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--n700)' }}>{oppGameScore}</span>
+              <span style={{ fontSize: 9, color: 'var(--n300)' }}>·</span>
+              <span style={{ fontSize: 9, color: 'var(--n400)', fontFamily: 'var(--font-mono)' }}>round</span>
+              <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--p2)' }}>{oppRoundScore}</span>
             </div>
             {oppEffectChips.length > 0 && (
-              <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginTop: 3, justifyContent: 'flex-end' }}>
+              <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 {oppEffectChips.map((chip, i) => (
                   <span key={i} style={{ fontSize: 9, background: 'var(--accent-warm-faint)', color: 'var(--accent-warm-muted)', padding: '1px 5px', borderRadius: '99px', fontWeight: 500 }}>{chip}</span>
                 ))}
@@ -921,6 +915,37 @@ function GameContent() {
             <Avatar name="?" variant="p2" size={30} />
             {!isMyTurn && <div style={{ position: 'absolute', bottom: -2, right: -2, width: 9, height: 9, borderRadius: '50%', background: 'var(--p2)', border: '2px solid var(--n0)' }} />}
           </div>
+        </div>
+      </div>
+
+      {/* ── Power-ups row ── */}
+      <div style={{ background: 'var(--n50, #f9fafb)', borderBottom: '1px solid var(--n100)', padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 2, flex: 1, flexWrap: 'wrap' }}>
+          {(Object.keys(POWER_UP_LABELS) as PowerUpId[]).map(id => {
+            const count = myInventory[id] ?? 0
+            const hl = myHighlights[id]
+            return (
+              <span key={id} title={`${POWER_UP_LABELS[id].name}${count > 0 ? ` ×${count}` : ''}`}
+                style={{ fontSize: 14, opacity: count > 0 ? 1 : 0.15, lineHeight: 1.2, position: 'relative', animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
+                {POWER_UP_LABELS[id].emoji}
+                {count > 1 && <sup style={{ fontSize: 7, fontFamily: 'var(--font-mono)', color: 'var(--p1)', fontWeight: 700 }}>{count}</sup>}
+              </span>
+            )
+          })}
+        </div>
+        <span style={{ fontSize: 9, color: 'var(--n300)', fontFamily: 'var(--font-mono)', fontWeight: 600, flexShrink: 0 }}>PWR</span>
+        <div style={{ display: 'flex', gap: 2, flex: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {(Object.keys(POWER_UP_LABELS) as PowerUpId[]).map(id => {
+            const count = opponentInventory[id] ?? 0
+            const hl = oppHighlights[id]
+            return (
+              <span key={id} title={`${POWER_UP_LABELS[id].name}${count > 0 ? ` ×${count}` : ''}`}
+                style={{ fontSize: 14, opacity: count > 0 ? 1 : 0.15, lineHeight: 1.2, position: 'relative', animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
+                {POWER_UP_LABELS[id].emoji}
+                {count > 1 && <sup style={{ fontSize: 7, fontFamily: 'var(--font-mono)', color: 'var(--p2)', fontWeight: 700 }}>{count}</sup>}
+              </span>
+            )
+          })}
         </div>
       </div>
 
@@ -1007,6 +1032,8 @@ function GameContent() {
 
         <style>{`
           html, body { overflow: hidden; max-width: 100vw; overscroll-behavior: none; }
+          #game-root * { -webkit-user-select: none; user-select: none; }
+          #game-root input { -webkit-user-select: text; user-select: text; }
           @keyframes blink { 50% { opacity: 0; } }
           @keyframes reactionFloat { 0% { opacity: 0; transform: translateY(20px); } 20% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-40px); } }
           @keyframes wordShimmer { 0% { filter: brightness(1.6) saturate(1.5); transform: scale(1.05); } 100% { filter: brightness(1) saturate(1); transform: scale(1); } }

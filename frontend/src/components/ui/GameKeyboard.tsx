@@ -20,6 +20,9 @@ export default function GameKeyboard({ onKey, disabled }: GameKeyboardProps) {
     e.preventDefault()
     if (disabled) return
     setPressedKey(k)
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(8)
+    }
     if (k === '⌫') onKey('BACKSPACE')
     else if (k === '↵') onKey('ENTER')
     else onKey(k)
@@ -38,15 +41,16 @@ export default function GameKeyboard({ onKey, disabled }: GameKeyboardProps) {
         flexDirection: 'column',
         gap: 10,
         userSelect: 'none',
+        WebkitUserSelect: 'none',
         flexShrink: 0,
-      }}
+      } as React.CSSProperties}
     >
       {ROWS.map((row, ri) => (
         <div key={ri} style={{ display: 'flex', justifyContent: 'center', gap: 6 }}>
           {row.map(k => {
             const isAction = k === '⌫' || k === '↵'
             const isReturn = k === '↵'
-            const isPressed = pressedKey === k
+            const isPressed = pressedKey === k && !disabled
 
             return (
               <div
@@ -56,6 +60,7 @@ export default function GameKeyboard({ onKey, disabled }: GameKeyboardProps) {
                 onPointerLeave={handlePointerUp}
                 onPointerCancel={handlePointerUp}
                 style={{
+                  position: 'relative',
                   background: isPressed
                     ? (isAction ? '#8d9198' : '#c8c8c8')
                     : (isAction ? '#adb5bd' : '#fff'),
@@ -77,9 +82,50 @@ export default function GameKeyboard({ onKey, disabled }: GameKeyboardProps) {
                   touchAction: 'manipulation',
                   WebkitTapHighlightColor: 'transparent',
                   transition: 'background 60ms, box-shadow 60ms, transform 60ms',
+                  overflow: 'visible',
                 } as React.CSSProperties}
               >
                 {k}
+                {/* iOS-style popover bubble */}
+                {isPressed && !isAction && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: 'calc(100% + 6px)',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      background: '#fff',
+                      borderRadius: 8,
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.22)',
+                      width: 44,
+                      height: 52,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 26,
+                      fontWeight: 500,
+                      fontFamily: 'var(--font-body)',
+                      color: '#1c1917',
+                      pointerEvents: 'none',
+                      zIndex: 100,
+                    }}
+                  >
+                    {k}
+                    {/* tail */}
+                    <div style={{
+                      position: 'absolute',
+                      bottom: -6,
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      width: 0,
+                      height: 0,
+                      borderLeft: '7px solid transparent',
+                      borderRight: '7px solid transparent',
+                      borderTop: '7px solid #fff',
+                      filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.1))',
+                    }} />
+                  </div>
+                )}
               </div>
             )
           })}
