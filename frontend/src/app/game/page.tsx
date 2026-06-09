@@ -516,7 +516,7 @@ function GameContent() {
           Opponent disconnected
         </p>
         <p style={{ fontSize: '13px', color: 'var(--n400)' }}>The game has ended</p>
-        <Button variant="secondary" onClick={() => router.push('/')}>Back to lobby</Button>
+        <Button variant="secondary" onClick={() => { window.location.href = '/' }}>Back to lobby</Button>
       </div>
     )
   }
@@ -675,7 +675,7 @@ function GameContent() {
               <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </div>
           ))}
-          <Button variant={isBotMatch ? 'primary' : 'secondary'} size="lg" full onClick={() => router.push('/')}>Back to lobby</Button>
+          <Button variant={isBotMatch ? 'primary' : 'secondary'} size="lg" full onClick={() => { window.location.href = '/' }}>Back to lobby</Button>
           {showInstallPrompt && (
             <Button
               variant="ghost"
@@ -739,6 +739,7 @@ function GameContent() {
           <Button variant="primary" size="lg" full onClick={sendNextRoundRequest} disabled={iConfirmed}>
             {iConfirmed ? 'Ready ✓' : 'Play Again'}
           </Button>
+          <Button variant="secondary" size="lg" full onClick={() => { window.location.href = '/' }}>Back to Lobby</Button>
 
           <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--n500)' }}>
             {opponentConfirmed ? 'Opponent is ready' : 'Waiting on opponent…'}
@@ -825,7 +826,7 @@ function GameContent() {
       {/* Game header */}
       <div style={{ background: 'var(--n0)', borderBottom: '1px solid var(--n200)', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
         <button
-          onClick={() => router.push('/')}
+          onClick={() => { window.location.href = '/' }}
           style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: 'var(--n400)', padding: '4px', lineHeight: 1 }}
           aria-label="Back to lobby"
         >←</button>
