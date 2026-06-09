@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSoundEngine } from '@/hooks/useSoundEngine'
 
 const ROWS = [
   ['Q','W','E','R','T','Y','U','I','O','P'],
@@ -15,11 +16,13 @@ interface GameKeyboardProps {
 
 export default function GameKeyboard({ onKey, disabled }: GameKeyboardProps) {
   const [pressedKey, setPressedKey] = useState<string | null>(null)
+  const { play } = useSoundEngine()
 
   const handlePointerDown = (k: string) => (e: React.PointerEvent) => {
     e.preventDefault()
     if (disabled) return
     setPressedKey(k)
+    play('tap')
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(8)
     }
