@@ -152,21 +152,35 @@ export default function LobbyPage() {
 
   if (phase === 'waiting') {
     return (
-      <div style={{ height: '100dvh', overflow: 'hidden', background: 'var(--n50)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, padding: 24, textAlign: 'center' }}>
-        <div style={{ position: 'relative', width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'var(--n400)', opacity: 0.2, animation: 'ping 1.2s cubic-bezier(0,0,0.2,1) infinite' }} />
-          <span style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--n400)', opacity: 0.8, display: 'block' }} />
+      <div style={{ height: '100dvh', overflow: 'hidden', background: 'var(--n50)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px 20px', textAlign: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 32, marginBottom: 32 }}>
+          {/* Me */}
+          <div style={{ textAlign: 'center' }}>
+            {player ? (
+              <Avatar name={player.display_name} variant="p1" size={56} />
+            ) : (
+              <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--n200)' }} />
+            )}
+            <p style={{ fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n800)', margin: '8px 0 2px' }}>You</p>
+            <p style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--n400)', margin: 0 }}>{player ? player.elo : '—'}</p>
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--n300)', fontFamily: 'var(--font-heading)', letterSpacing: '0.05em' }}>VS</span>
+          {/* Searching */}
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ position: 'relative', width: 56, height: 56, margin: '0 auto' }}>
+              <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'var(--p1-light)', animation: 'ping 1.4s cubic-bezier(0,0,0.2,1) infinite', opacity: 0.5 }} />
+              <div style={{ position: 'relative', width: 56, height: 56, borderRadius: '50%', background: 'var(--n100)', border: '2px dashed var(--n300)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: 'var(--n400)' }}>?</div>
+            </div>
+            <p style={{ fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n400)', margin: '8px 0 2px' }}>Searching</p>
+            <p style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--n300)', margin: 0 }}>±200 ELO</p>
+          </div>
         </div>
-        <div>
-          <p style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--n900)', margin: 0 }}>
-            Finding {mode === 'speed_round' ? 'Speed' : 'Classic'} opponent…
-          </p>
-          <p style={{ fontSize: 13, color: 'var(--n400)', fontFamily: 'var(--font-body)', marginTop: 6 }}>
-            Players in the other mode won&apos;t match with you
-          </p>
-        </div>
+        <p style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--n900)', margin: '0 0 6px' }}>Finding opponent…</p>
+        <p style={{ fontSize: 12, color: 'var(--n400)', fontFamily: 'var(--font-body)', margin: '0 0 28px' }}>
+          {MODES[mode].label} · {MODES[mode].detail}
+        </p>
         <Button variant="ghost" size="sm" onClick={handleCancel}>Cancel</Button>
-        <style>{`@keyframes ping { 75%,100% { transform: scale(2); opacity: 0; } }`}</style>
+        <style>{`@keyframes ping { 75%, 100% { transform: scale(1.6); opacity: 0; } }`}</style>
       </div>
     )
   }
@@ -215,33 +229,35 @@ export default function LobbyPage() {
           </div>
 
           {/* ── Mode picker ── */}
-          <div style={{ marginBottom: 6 }}>
-            <div role="tablist" style={{ display: 'flex', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--n200)' }}>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', background: 'var(--n100)', borderRadius: 'var(--radius-full)', padding: 3, gap: 2 }}>
               {(Object.entries(MODES) as [GameMode, { label: string; detail: string }][]).map(([id, cfg]) => {
                 const active = mode === id
                 return (
                   <button
                     key={id}
-                    role="tab"
-                    aria-selected={active}
                     onClick={() => selectMode(id)}
                     style={{
                       flex: 1,
-                      padding: '10px 12px',
-                      background: active ? 'var(--n900)' : 'var(--n0)',
-                      color: active ? 'var(--n0)' : 'var(--n700)',
-                      border: 'none',
-                      cursor: 'pointer',
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-full)',
+                      background: active ? 'var(--n0)' : 'transparent',
+                      color: active ? 'var(--n900)' : 'var(--n500)',
+                      border: active ? '1px solid var(--n200)' : '1px solid transparent',
                       fontFamily: 'var(--font-heading)',
-                      borderRight: id === 'classic' ? '1px solid var(--n200)' : 'none',
+                      fontSize: 13,
+                      fontWeight: active ? 600 : 400,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                      boxShadow: active ? '0 1px 3px rgba(0,0,0,0.07)' : 'none',
                     }}
                   >
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{cfg.label}</div>
+                    {cfg.label}
                   </button>
                 )
               })}
             </div>
-            <p style={{ fontSize: 12, color: 'var(--n400)', fontFamily: 'var(--font-body)', margin: '6px 0 0', textAlign: 'center' }}>
+            <p style={{ fontSize: 11, color: 'var(--n400)', fontFamily: 'var(--font-body)', margin: '5px 0 0 4px' }}>
               {MODES[mode].detail}
             </p>
           </div>

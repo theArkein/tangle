@@ -7,7 +7,8 @@ import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
 import WordPill from '@/components/ui/WordPill'
 import TimerBar from '@/components/ui/TimerBar'
-import GameToast, { type ToastVariant } from '@/components/ui/GameToast'
+import GameToast, { type ToastVariant, TOAST_DURATION } from '@/components/ui/GameToast'
+import GameKeyboard from '@/components/ui/GameKeyboard'
 import { useSoundEngine } from '@/hooks/useSoundEngine'
 import { POWER_UP_LABELS, POWER_UP_GUIDE, type PowerUpId } from '@/lib/powerups'
 
@@ -115,6 +116,10 @@ const REACTION_OPTIONS: Array<{ key: string; emoji: string }> = [
   { key: 'clap', emoji: '👏' },
   { key: 'skull', emoji: '💀' },
 ]
+const POWER_DESC = Object.fromEntries(
+  POWER_UP_GUIDE.map(e => [e.id, { own: e.description, opp: e.opponentDescription }])
+) as Record<PowerUpId, { own: string; opp: string }>
+
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const S = {
@@ -154,14 +159,22 @@ function GameContent() {
   const [forfeitedBy, setForfeitedBy] = useState<string | null>(null)
   const [opponentTyping, setOpponentTyping] = useState<string>('')
 
-  const [keyboardOpen, setKeyboardOpen] = useState(false)
-  const [activeToast, setActiveToast] = useState<{ variant: ToastVariant; subText?: string } | null>(null)
+  const [isMobile, setIsMobile] = useState(false)
+  const [activeToast, setActiveToast] = useState<{ id: number; variant: ToastVariant; subText?: string } | null>(null)
+  const toastIdRef = useRef(0)
   const [powersOpen, setPowersOpen] = useState(false)
   const [reactionsOpen, setReactionsOpen] = useState(false)
 
   const { play, muted, setMuted } = useSoundEngine()
   const playRef = useRef(play)
   useEffect(() => { playRef.current = play }, [play])
+  useEffect(() => { setIsMobile(navigator.maxTouchPoints > 0) }, [])
+
+  useEffect(() => {
+    if (!activeToast) return
+    const id = setTimeout(() => setActiveToast(null), TOAST_DURATION)
+    return () => clearTimeout(id)
+  }, [activeToast?.id])
 
   const wsRef = useRef<WebSocket | null>(null)
   const chainScrollRef = useRef<HTMLDivElement>(null)
@@ -187,7 +200,13 @@ function GameContent() {
     if (!myId || !roomId) return
 
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${proto}//${window.location.host}/api/rooms/${roomId}/ws`)
+    const wsHost = process.env.NODE_ENV === 'development' ? 'localhost:8787' : window.location.host
+    const wsUrl = `${proto}//${wsHost}/api/rooms/${roomId}/ws`
+    console.log('[ws] connecting to', wsUrl)
+    const ws = new WebSocket(wsUrl)
+    ws.onopen = () => console.log('[ws] opened')
+    ws.onerror = (e) => console.log('[ws] error', e.type)
+    ws.onclose = (e) => console.log('[ws] closed code=' + e.code)
     wsRef.current = ws
 
     ws.onmessage = (ev) => {
@@ -225,11 +244,10 @@ function GameContent() {
         if (msg.valid) {
           setWordInput('')
           setFeedback({ text: `+${msg.points} pts`, ok: true })
-          setActiveToast({ variant: 'success', subText: `+${msg.points} pts` })
           playRef.current('word_valid')
         } else {
           setFeedback({ text: msg.reason ?? 'Invalid word', ok: false })
-          setActiveToast({ variant: 'error', subText: msg.reason })
+          setActiveToast({ id: ++toastIdRef.current, variant: 'error', subText: msg.reason })
           playRef.current('word_invalid')
         }
         feedbackTimerRef.current = setTimeout(() => setFeedback(null), 2000)
@@ -241,8 +259,10 @@ function GameContent() {
         const setter = isMe ? setMyHighlights : setOppHighlights
         setter(h => ({ ...h, [msg.powerup]: 'earned' }))
         setTimeout(() => setter(h => { const n = { ...h }; delete n[msg.powerup]; return n }), 1500)
-        const pName = POWER_UP_LABELS[msg.powerup]?.name
-        setActiveToast({ variant: isMe ? 'power_earned_me' : 'power_earned_opp', subText: pName })
+        const pLabel = POWER_UP_LABELS[msg.powerup]
+        const pDesc = POWER_DESC[msg.powerup]
+        const pSub = `${pLabel?.emoji} ${pLabel?.name} — ${isMe ? pDesc?.own : pDesc?.opp}`
+        setActiveToast({ id: ++toastIdRef.current, variant: isMe ? 'power_earned_me' : 'power_earned_opp', subText: pSub })
         playRef.current(isMe ? 'power_earned' : 'opp_turn')
         return
       }
@@ -252,8 +272,10 @@ function GameContent() {
         const setter = isMe ? setMyHighlights : setOppHighlights
         setter(h => ({ ...h, [msg.powerup]: 'activated' }))
         setTimeout(() => setter(h => { const n = { ...h }; delete n[msg.powerup]; return n }), 1000)
-        const pName = POWER_UP_LABELS[msg.powerup]?.name
-        setActiveToast({ variant: isMe ? 'power_used_me' : 'power_used_opp', subText: pName })
+        const pLabel2 = POWER_UP_LABELS[msg.powerup]
+        const pDesc2 = POWER_DESC[msg.powerup]
+        const pSub2 = `${pLabel2?.emoji} ${pLabel2?.name} — ${isMe ? pDesc2?.own : pDesc2?.opp}`
+        setActiveToast({ id: ++toastIdRef.current, variant: isMe ? 'power_used_me' : 'power_used_opp', subText: pSub2 })
         playRef.current(isMe ? 'power_used_me' : 'power_used_opp')
         return
       }
@@ -263,7 +285,9 @@ function GameContent() {
         const setter = isMe ? setMyHighlights : setOppHighlights
         setter(h => ({ ...h, secondLife: 'activated' }))
         setTimeout(() => setter(h => { const n = { ...h }; delete n.secondLife; return n }), 1000)
-        setActiveToast({ variant: isMe ? 'power_used_me' : 'power_used_opp', subText: 'Second Life' })
+        const slLabel = POWER_UP_LABELS.secondLife
+        const slSub = `${slLabel.emoji} ${slLabel.name} — ${isMe ? POWER_DESC.secondLife?.own : POWER_DESC.secondLife?.opp}`
+        setActiveToast({ id: ++toastIdRef.current, variant: isMe ? 'power_used_me' : 'power_used_opp', subText: slSub })
         playRef.current(isMe ? 'power_used_me' : 'power_used_opp')
         return
       }
@@ -282,7 +306,7 @@ function GameContent() {
       if (msg.type === 'danger_zone_entered') {
         setFeedback({ ok: true, text: 'DANGER ZONE — 3× scoring, 5s timer!' })
         setTimeout(() => setFeedback(null), 3000)
-        setActiveToast({ variant: 'danger_zone' })
+        setActiveToast({ id: ++toastIdRef.current, variant: 'danger_zone' })
         playRef.current('danger_zone')
         return
       }
@@ -299,7 +323,7 @@ function GameContent() {
 
       if (msg.type === 'swap_letter_chosen') {
         const isMe = msg.byPlayerId === myId
-        setActiveToast({ variant: isMe ? 'power_used_me' : 'power_used_opp', subText: 'Swap' })
+        setActiveToast({ id: ++toastIdRef.current, variant: isMe ? 'power_used_me' : 'power_used_opp', subText: 'Swap' })
         playRef.current(isMe ? 'power_used_me' : 'power_used_opp')
         return
       }
@@ -399,7 +423,7 @@ function GameContent() {
     if (timeLeft <= 3 && !timeWarnFiredRef.current) {
       timeWarnFiredRef.current = true
       playRef.current('time_warn')
-      setActiveToast({ variant: 'time_warn' })
+      setActiveToast({ id: ++toastIdRef.current, variant: 'time_warn' })
     }
     if (timeLeft > 3) timeWarnFiredRef.current = false
   }, [timeLeft, matchState?.status])
@@ -411,6 +435,17 @@ function GameContent() {
     setSubmitting(true)
     setFeedback(null)
   }, [wordInput, submitting])
+
+  const handleGameKey = useCallback((key: string) => {
+    if (key === 'ENTER') { submitWord(); return }
+    setWordInput(prev => {
+      const next = key === 'BACKSPACE' ? prev.slice(0, -1) : prev + key.toLowerCase()
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'typing_update', partial: next }))
+      }
+      return next
+    })
+  }, [submitWord])
 
   const sendNextRoundRequest = useCallback(() => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
@@ -806,12 +841,15 @@ function GameContent() {
 
       {/* Toast overlay */}
       {activeToast && (
-        <div style={{ flexShrink: 0 }}>
-          <GameToast
-            variant={activeToast.variant}
-            subText={activeToast.subText}
-            onDismiss={() => setActiveToast(null)}
-          />
+        <div style={{ position: 'fixed', top: 12, left: 0, right: 0, zIndex: 60, pointerEvents: 'none', display: 'flex', justifyContent: 'center', padding: '0 14px' }}>
+          <div style={{ pointerEvents: 'auto', width: '100%', maxWidth: 340 }}>
+            <GameToast
+              key={activeToast.id}
+              variant={activeToast.variant}
+              subText={activeToast.subText}
+              onDismiss={() => setActiveToast(null)}
+            />
+          </div>
         </div>
       )}
 
@@ -961,8 +999,8 @@ function GameContent() {
           <TimerBar percent={timerPct} danger={timerUrgent} label={`${Math.ceil(timeLeft)}s`} />
         </div>
 
-        {/* Powers accordion — classic mode only, hidden when keyboard open */}
-        {gameMode === 'classic' && !keyboardOpen && (
+        {/* Powers accordion — classic mode only, hidden when game keyboard open */}
+        {gameMode === 'classic' && !(isMobile && isMyTurn) && (
           <>
             <button onClick={() => setPowersOpen(o => !o)}
               style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--n50)', border: `1px solid ${powersOpen ? 'var(--n300)' : 'var(--n200)'}`, borderRadius: powersOpen ? 'var(--radius-md) var(--radius-md) 0 0' : 'var(--radius-md)', padding: '7px 12px', marginBottom: powersOpen ? 0 : 10, cursor: 'pointer' }}>
@@ -1036,35 +1074,42 @@ function GameContent() {
 
         {/* Input row */}
         <div style={{ display: 'flex', gap: '8px' }}>
-          <input
-            type="text"
-            value={wordInput}
-            onChange={e => {
-              const v = e.target.value
-              setWordInput(v)
-              if (wsRef.current?.readyState === WebSocket.OPEN && isMyTurn) {
-                wsRef.current.send(JSON.stringify({ type: 'typing_update', partial: v }))
+          {isMobile ? (
+            <div style={{ ...S.input, flex: 1, display: 'flex', alignItems: 'center', opacity: !isMyTurn || submitting ? 0.45 : 1, cursor: 'default', minHeight: 46 }}>
+              {wordInput
+                ? <span style={{ color: 'var(--n900)' }}>{wordInput}<span style={{ animation: isMyTurn ? 'blink 1s step-end infinite' : 'none', opacity: 0.5 }}>|</span></span>
+                : <span style={{ color: 'var(--n400)' }}>{isMyTurn ? (round.chain.length === 0 ? `Start with ${round.seedLetter.toUpperCase()}…` : `Word starting with ${nextSeed}…`) : 'Waiting…'}</span>
               }
-            }}
-            onFocus={() => { if (navigator.maxTouchPoints > 0) setKeyboardOpen(true) }}
-            onBlur={() => setKeyboardOpen(false)}
-            onKeyDown={e => { if (e.key === 'Enter') submitWord() }}
-            disabled={!isMyTurn || submitting}
-            placeholder={
-              isMyTurn
-                ? round.chain.length === 0
-                  ? `Word starting with ${round.seedLetter.toUpperCase()}…`
-                  : `Word starting with ${nextSeed}…`
-                : 'Waiting for opponent…'
-            }
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="none"
-            spellCheck={false}
-            inputMode="text"
-            enterKeyHint="send"
-            style={{ ...S.input, opacity: !isMyTurn || submitting ? 0.45 : 1, cursor: !isMyTurn || submitting ? 'not-allowed' : 'text' }}
-          />
+            </div>
+          ) : (
+            <input
+              type="text"
+              value={wordInput}
+              onChange={e => {
+                const v = e.target.value
+                setWordInput(v)
+                if (wsRef.current?.readyState === WebSocket.OPEN && isMyTurn) {
+                  wsRef.current.send(JSON.stringify({ type: 'typing_update', partial: v }))
+                }
+              }}
+              onKeyDown={e => { if (e.key === 'Enter') submitWord() }}
+              disabled={!isMyTurn || submitting}
+              placeholder={
+                isMyTurn
+                  ? round.chain.length === 0
+                    ? `Word starting with ${round.seedLetter.toUpperCase()}…`
+                    : `Word starting with ${nextSeed}…`
+                  : 'Waiting for opponent…'
+              }
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              inputMode="text"
+              enterKeyHint="send"
+              style={{ ...S.input, opacity: !isMyTurn || submitting ? 0.45 : 1, cursor: !isMyTurn || submitting ? 'not-allowed' : 'text' }}
+            />
+          )}
           <Button
             variant="primary"
             size="md"
@@ -1075,6 +1120,11 @@ function GameContent() {
           </Button>
         </div>
       </div>
+
+      {/* Game keyboard — mobile only, shown on my turn */}
+      {isMobile && isMyTurn && (
+        <GameKeyboard onKey={handleGameKey} disabled={submitting} />
+      )}
     </div>
   )
 }
