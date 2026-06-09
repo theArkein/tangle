@@ -160,9 +160,9 @@ function GameContent() {
   const [opponentTyping, setOpponentTyping] = useState<string>('')
 
   const [isMobile, setIsMobile] = useState(false)
+  const [keyboardVisible, setKeyboardVisible] = useState(true)
   const [activeToast, setActiveToast] = useState<{ id: number; variant: ToastVariant; subText?: string } | null>(null)
   const toastIdRef = useRef(0)
-  const [powersOpen, setPowersOpen] = useState(false)
   const [reactionsOpen, setReactionsOpen] = useState(false)
 
   const { play, muted, setMuted } = useSoundEngine()
@@ -925,7 +925,7 @@ function GameContent() {
       </div>
 
       {/* ── Word chain + floating reaction FAB ── */}
-      <div style={{ flex: 1, padding: '12px 16px', display: 'flex', flexWrap: 'wrap', gap: 6, alignContent: 'flex-start', overflow: 'hidden', position: 'relative' }}>
+      <div style={{ flex: 1, padding: `12px 16px ${gameMode === 'classic' ? 52 : 12}px`, display: 'flex', flexWrap: 'wrap', gap: 6, alignContent: 'flex-start', overflow: 'hidden', position: 'relative' }}>
         {blindOnMe && blindOnMe.kind === 'blind' ? (
           <div style={{ width: '100%', textAlign: 'center', color: 'var(--n400)', paddingTop: 20 }}>
             <div style={{ fontSize: 28, marginBottom: 4 }}>🙈</div>
@@ -954,8 +954,8 @@ function GameContent() {
           </>
         )}
 
-        {/* Floating reaction FAB */}
-        <div style={{ position: 'absolute', bottom: 10, right: 14, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+        {/* Floating reaction FAB — sits above the powers strip */}
+        <div style={{ position: 'absolute', bottom: gameMode === 'classic' ? 58 : 10, right: 14, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
           {reactionsOpen && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, background: 'var(--n0)', border: '1px solid var(--n200)', borderRadius: 'var(--radius-xl)', padding: '6px 4px', boxShadow: '0 4px 16px rgba(0,0,0,0.10)' }}>
               {REACTION_OPTIONS.map(r => (
@@ -967,10 +967,34 @@ function GameContent() {
             </div>
           )}
           <button onClick={() => setReactionsOpen(o => !o)}
-            style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--n0)', border: '1px solid var(--n200)', boxShadow: '0 2px 8px rgba(0,0,0,0.10)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform 0.15s', transform: reactionsOpen ? 'rotate(45deg)' : 'none' }}>
+            style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--n0)', border: '1px solid var(--n200)', boxShadow: '0 2px 8px rgba(0,0,0,0.10)', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform 0.15s', transform: reactionsOpen ? 'rotate(45deg)' : 'none' }}>
             {reactionsOpen ? '✕' : '😊'}
           </button>
         </div>
+
+        {/* Powers strip — classic mode, always visible at bottom of chain area */}
+        {gameMode === 'classic' && (
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'var(--n0)', borderTop: '1px solid var(--n100)', padding: '6px 10px', display: 'flex', gap: 4, alignItems: 'center', overflowX: 'auto', msOverflowStyle: 'none' } as React.CSSProperties}>
+            {(Object.keys(POWER_UP_LABELS) as PowerUpId[]).map(id => {
+              const count = myInventory[id] ?? 0
+              const earned = count > 0
+              const turnLocked = !isMyTurn && id !== 'secondLife' && id !== 'block'
+              const hl = myHighlights[id]
+              return (
+                <button key={id}
+                  disabled={!earned || turnLocked}
+                  onClick={() => activatePowerUp(id)}
+                  title={`${POWER_UP_LABELS[id].name}${earned ? ` ×${count}` : ''}`}
+                  style={{ position: 'relative', background: 'none', border: 'none', padding: '2px 3px', cursor: earned && !turnLocked ? 'pointer' : 'default', opacity: earned ? (turnLocked ? 0.5 : 1) : 0.2, filter: earned ? 'none' : 'grayscale(1)', flexShrink: 0, animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
+                  <span style={{ fontSize: 22, lineHeight: 1 }}>{POWER_UP_LABELS[id].emoji}</span>
+                  {earned && (
+                    <span style={{ position: 'absolute', top: 0, right: 0, fontSize: 8, fontFamily: 'var(--font-mono)', background: 'var(--p1)', color: 'var(--n0)', borderRadius: '99px', padding: '1px 3px', fontWeight: 700, lineHeight: 1 }}>×{count}</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        )}
 
         {/* Floating reactions feed */}
         {reactionFeed.length > 0 && (
@@ -999,46 +1023,6 @@ function GameContent() {
           <TimerBar percent={timerPct} danger={timerUrgent} label={`${Math.ceil(timeLeft)}s`} />
         </div>
 
-        {/* Powers accordion — classic mode only, hidden when game keyboard open */}
-        {gameMode === 'classic' && !(isMobile && isMyTurn) && (
-          <>
-            <button onClick={() => setPowersOpen(o => !o)}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--n50)', border: `1px solid ${powersOpen ? 'var(--n300)' : 'var(--n200)'}`, borderRadius: powersOpen ? 'var(--radius-md) var(--radius-md) 0 0' : 'var(--radius-md)', padding: '7px 12px', marginBottom: powersOpen ? 0 : 10, cursor: 'pointer' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n700)' }}>Powers</span>
-                {(Object.values(myInventory) as number[]).some(c => c > 0) && (
-                  <span style={{ fontSize: 10, background: 'var(--p1-light)', color: 'var(--p1)', fontFamily: 'var(--font-mono)', fontWeight: 700, borderRadius: 'var(--radius-full)', padding: '1px 6px' }}>
-                    {(Object.values(myInventory) as number[]).filter(c => c > 0).length} ready
-                  </span>
-                )}
-              </div>
-              <span style={{ fontSize: 11, color: 'var(--n400)', transition: 'transform 0.2s', display: 'inline-block', transform: powersOpen ? 'rotate(180deg)' : 'none' }}>▾</span>
-            </button>
-            {powersOpen && (
-              <div style={{ background: 'var(--n50)', border: '1px solid var(--n300)', borderTop: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)', padding: 8, marginBottom: 10 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 5 }}>
-                  {(Object.keys(POWER_UP_LABELS) as PowerUpId[]).map(id => {
-                    const count = myInventory[id] ?? 0
-                    const earned = count > 0
-                    const turnLocked = !isMyTurn && id !== 'secondLife' && id !== 'block'
-                    const hl = myHighlights[id]
-                    return (
-                      <button key={id} disabled={!earned || turnLocked} onClick={() => { activatePowerUp(id); setPowersOpen(false) }}
-                        title={POWER_UP_LABELS[id].name}
-                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: earned ? 'var(--n0)' : 'transparent', border: `1px solid ${earned ? (hl ? 'var(--accent-warm)' : 'var(--n200)') : 'var(--n150)'}`, borderRadius: 'var(--radius-md)', padding: '6px 4px', cursor: earned && !turnLocked ? 'pointer' : 'default', opacity: earned ? (turnLocked ? 0.5 : 1) : 0.35, position: 'relative', animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
-                        <span style={{ fontSize: 18 }}>{POWER_UP_LABELS[id].emoji}</span>
-                        <span style={{ fontSize: 9, fontFamily: 'var(--font-body)', color: 'var(--n600)', textAlign: 'center', lineHeight: 1.2 }}>{POWER_UP_LABELS[id].name}</span>
-                        {earned && (
-                          <span style={{ position: 'absolute', top: -4, right: -4, fontSize: 8, fontFamily: 'var(--font-mono)', background: 'var(--p1)', color: 'var(--n0)', borderRadius: 'var(--radius-full)', padding: '1px 4px', fontWeight: 700 }}>×{count}</span>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-          </>
-        )}
 
         {/* Turn label + word count */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -1073,12 +1057,12 @@ function GameContent() {
         )}
 
         {/* Input row */}
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {isMobile ? (
-            <div style={{ ...S.input, flex: 1, display: 'flex', alignItems: 'center', opacity: !isMyTurn || submitting ? 0.45 : 1, cursor: 'default', minHeight: 46 }}>
+            <div style={{ ...S.input, flex: 1, display: 'flex', alignItems: 'center', opacity: !isMyTurn || submitting ? 0.45 : 1, cursor: 'default', fontSize: 13, padding: '7px 10px' }}>
               {wordInput
                 ? <span style={{ color: 'var(--n900)' }}>{wordInput}<span style={{ animation: isMyTurn ? 'blink 1s step-end infinite' : 'none', opacity: 0.5 }}>|</span></span>
-                : <span style={{ color: 'var(--n400)' }}>{isMyTurn ? (round.chain.length === 0 ? `Start with ${round.seedLetter.toUpperCase()}…` : `Word starting with ${nextSeed}…`) : 'Waiting…'}</span>
+                : <span style={{ color: 'var(--n400)' }}>{isMyTurn ? (round.chain.length === 0 ? `Start with ${round.seedLetter.toUpperCase()}…` : `${nextSeed}…`) : 'Waiting…'}</span>
               }
             </div>
           ) : (
@@ -1094,35 +1078,28 @@ function GameContent() {
               }}
               onKeyDown={e => { if (e.key === 'Enter') submitWord() }}
               disabled={!isMyTurn || submitting}
-              placeholder={
-                isMyTurn
-                  ? round.chain.length === 0
-                    ? `Word starting with ${round.seedLetter.toUpperCase()}…`
-                    : `Word starting with ${nextSeed}…`
-                  : 'Waiting for opponent…'
-              }
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="none"
-              spellCheck={false}
-              inputMode="text"
-              enterKeyHint="send"
-              style={{ ...S.input, opacity: !isMyTurn || submitting ? 0.45 : 1, cursor: !isMyTurn || submitting ? 'not-allowed' : 'text' }}
+              placeholder={isMyTurn ? (round.chain.length === 0 ? `Start with ${round.seedLetter.toUpperCase()}…` : `${nextSeed}…`) : 'Waiting…'}
+              autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false}
+              inputMode="text" enterKeyHint="send"
+              style={{ ...S.input, fontSize: 13, padding: '7px 10px', opacity: !isMyTurn || submitting ? 0.45 : 1, cursor: !isMyTurn || submitting ? 'not-allowed' : 'text' }}
             />
           )}
-          <Button
-            variant="primary"
-            size="md"
-            onClick={submitWord}
-            disabled={!isMyTurn || submitting || !wordInput.trim()}
-          >
+          <Button variant="primary" size="sm" onClick={submitWord} disabled={!isMyTurn || submitting || !wordInput.trim()}>
             {submitting ? '…' : '→'}
           </Button>
+          {isMobile && (
+            <button
+              onClick={() => setKeyboardVisible(v => !v)}
+              disabled={!isMyTurn}
+              style={{ background: keyboardVisible && isMyTurn ? 'var(--n900)' : 'var(--n100)', border: '1px solid var(--n200)', borderRadius: 'var(--radius-md)', padding: '6px 8px', fontSize: 15, lineHeight: 1, cursor: isMyTurn ? 'pointer' : 'default', opacity: isMyTurn ? 1 : 0.4, color: keyboardVisible && isMyTurn ? 'var(--n0)' : 'var(--n600)', flexShrink: 0 }}
+              aria-label={keyboardVisible ? 'Hide keyboard' : 'Show keyboard'}
+            >⌨</button>
+          )}
         </div>
       </div>
 
-      {/* Game keyboard — mobile only, shown on my turn */}
-      {isMobile && isMyTurn && (
+      {/* Game keyboard — mobile only, shown on my turn when visible */}
+      {isMobile && isMyTurn && keyboardVisible && (
         <GameKeyboard onKey={handleGameKey} disabled={submitting} />
       )}
     </div>
