@@ -146,7 +146,8 @@ function GameContent() {
   const [disconnected, setDisconnected] = useState(false)
   const [wordInput, setWordInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [feedback, setFeedback] = useState<{ text: string; ok: boolean } | null>(null)
+  const [floats, setFloats] = useState<Array<{ id: number; text: string; ok: boolean; byMe: boolean }>>([])
+  const floatIdRef = useRef(0)
   const [timeLeft, setTimeLeft] = useState(60)
   const [nextRoundTimeLeft, setNextRoundTimeLeft] = useState(NEXT_ROUND_SECONDS)
   const [roundHistory, setRoundHistory] = useState<RoundHistoryEntry[]>([])
@@ -181,7 +182,7 @@ function GameContent() {
   const chainScrollRef = useRef<HTMLDivElement>(null)
   const deferredInstallRef = useRef<BeforeInstallPromptEvent | null>(null)
   const prevStateRef = useRef<MatchState | null>(null)
-  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const turnStartAtRef = useRef(0)
   const nextRoundStartedAtRef = useRef(0)
   const reactionIdRef = useRef(0)
@@ -241,17 +242,19 @@ function GameContent() {
 
       if (msg.type === 'word_result') {
         setSubmitting(false)
-        if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
         if (msg.valid) {
           setWordInput('')
-          setFeedback({ text: `+${msg.points} pts`, ok: true })
+          const id = ++floatIdRef.current
+          setFloats(prev => [...prev, { id, text: `+${msg.points}`, ok: true, byMe: true }])
+          setTimeout(() => setFloats(prev => prev.filter(f => f.id !== id)), 2000)
           playRef.current('word_valid')
         } else {
-          setFeedback({ text: msg.reason ?? 'Invalid word', ok: false })
+          const id = ++floatIdRef.current
+          setFloats(prev => [...prev, { id, text: msg.reason ?? 'Invalid', ok: false, byMe: true }])
+          setTimeout(() => setFloats(prev => prev.filter(f => f.id !== id)), 2000)
           setActiveToast({ id: ++toastIdRef.current, variant: 'error', subText: msg.reason })
           playRef.current('word_invalid')
         }
-        feedbackTimerRef.current = setTimeout(() => setFeedback(null), 2000)
         return
       }
 
@@ -305,8 +308,6 @@ function GameContent() {
       }
 
       if (msg.type === 'danger_zone_entered') {
-        setFeedback({ ok: true, text: 'DANGER ZONE — 3× scoring, 5s timer!' })
-        setTimeout(() => setFeedback(null), 3000)
         setActiveToast({ id: ++toastIdRef.current, variant: 'danger_zone' })
         playRef.current('danger_zone')
         return
@@ -350,6 +351,15 @@ function GameContent() {
           const firstUpdate = !prevRound
           if (chainGrew || roundChanged || firstUpdate) {
             turnStartAtRef.current = Date.now()
+          }
+          if (chainGrew && prevRound && prevRound.currentPlayerId !== myId) {
+            const oppId = state.player1Id === myId ? state.player2Id : state.player1Id
+            const diff = (newRound.playerRoundScores[oppId] ?? 0) - (prevRound.playerRoundScores[oppId] ?? 0)
+            if (diff > 0) {
+              const id = ++floatIdRef.current
+              setFloats(prev => [...prev, { id, text: `+${diff}`, ok: true, byMe: false }])
+              setTimeout(() => setFloats(prev => prev.filter(f => f.id !== id)), 2000)
+            }
           }
         }
 
@@ -435,7 +445,6 @@ function GameContent() {
     if (!word || submitting || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
     wsRef.current.send(JSON.stringify({ type: 'submit_word', word }))
     setSubmitting(true)
-    setFeedback(null)
   }, [wordInput, submitting])
 
   const handleGameKey = useCallback((key: string) => {
@@ -1023,12 +1032,33 @@ function GameContent() {
           </div>
         )}
 
+        {/* Score / word floats */}
+        {floats.filter(f => f.byMe).length > 0 && (
+          <div style={{ position: 'absolute', bottom: 8, left: 14, display: 'flex', flexDirection: 'column-reverse', gap: 4, pointerEvents: 'none' }}>
+            {floats.filter(f => f.byMe).map(f => (
+              <div key={f.id} style={{ fontSize: 15, fontWeight: 700, fontFamily: f.ok ? 'var(--font-mono)' : 'var(--font-body)', color: f.ok ? 'var(--p1)' : 'var(--danger)', animation: 'scoreFloat 2s ease-out forwards', whiteSpace: 'nowrap' }}>
+                {f.text}
+              </div>
+            ))}
+          </div>
+        )}
+        {floats.filter(f => !f.byMe).length > 0 && (
+          <div style={{ position: 'absolute', bottom: 8, right: 14, display: 'flex', flexDirection: 'column-reverse', gap: 4, alignItems: 'flex-end', pointerEvents: 'none' }}>
+            {floats.filter(f => !f.byMe).map(f => (
+              <div key={f.id} style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--p2)', animation: 'scoreFloat 2s ease-out forwards' }}>
+                {f.text}
+              </div>
+            ))}
+          </div>
+        )}
+
         <style>{`
           html, body { overflow: hidden; max-width: 100vw; overscroll-behavior: none; }
           #game-root * { -webkit-user-select: none; user-select: none; }
           #game-root input { -webkit-user-select: text; user-select: text; }
           @keyframes blink { 50% { opacity: 0; } }
           @keyframes reactionFloat { 0% { opacity: 0; transform: translateY(20px); } 20% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-40px); } }
+          @keyframes scoreFloat { 0% { opacity: 0; transform: translateY(0); } 15% { opacity: 1; transform: translateY(-8px); } 100% { opacity: 0; transform: translateY(-60px); } }
           @keyframes wordShimmer { 0% { filter: brightness(1.6) saturate(1.5); transform: scale(1.05); } 100% { filter: brightness(1) saturate(1); transform: scale(1); } }
           @keyframes earnGlow { 0% { box-shadow: 0 0 0 2px #4caf50; } 60% { box-shadow: 0 0 8px 4px #4caf5088; } 100% { box-shadow: 0 0 0 2px #4caf50; } }
           @keyframes activateFlash { 0% { background: var(--accent-warm-faint); } 50% { background: #ffe09a; } 100% { background: var(--n0); } }
@@ -1067,13 +1097,6 @@ function GameContent() {
               ))}
             </div>
           </div>
-        )}
-
-        {/* Feedback */}
-        {feedback && (
-          <p style={{ fontSize: 13, fontWeight: 500, color: feedback.ok ? 'var(--success)' : 'var(--danger)', marginBottom: 8 }}>
-            {feedback.text}
-          </p>
         )}
 
         {/* Input row */}
