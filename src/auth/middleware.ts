@@ -30,5 +30,6 @@ export async function createSessionCookie(
     env.JWT_SECRET
   );
 
-  return `session=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${thirtyDays}`;
+  const secure = env.ENVIRONMENT === "production" ? "; Secure" : "";
+  return `session=${token}; HttpOnly${secure}; SameSite=Lax; Path=/; Max-Age=${thirtyDays}`;
 }

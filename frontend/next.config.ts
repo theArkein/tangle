@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
   trailingSlash: true,
   env: {
     NEXT_PUBLIC_APP_VERSION: getVersion(),
-    ...(isDev ? { NEXT_PUBLIC_WS_HOST: 'localhost:8787' } : {}),
+    ...(isDev ? { NEXT_PUBLIC_WS_HOST: `${process.env.LAN_IP ?? 'localhost'}:8787` } : {}),
   },
   ...(isDev
     ? {

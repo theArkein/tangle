@@ -204,7 +204,7 @@ function GameContent() {
     if (!myId || !roomId) return
 
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsHost = process.env.NODE_ENV === 'development' ? 'localhost:8787' : window.location.host
+    const wsHost = process.env.NODE_ENV === 'development' ? `${window.location.hostname}:8787` : window.location.host
     const wsUrl = `${proto}//${wsHost}/api/rooms/${roomId}/ws`
     console.log('[ws] connecting to', wsUrl)
     const ws = new WebSocket(wsUrl)

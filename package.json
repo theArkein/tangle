@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
+    "dev:lan": "npx concurrently -n worker,frontend -c blue,green \"lsof -ti:8787 | xargs kill -9 2>/dev/null; wrangler dev --ip 0.0.0.0\" \"lsof -ti:3000 | xargs kill -9 2>/dev/null; LAN_IP=192.168.0.104 npm run dev --prefix frontend -- -H 0.0.0.0\"",
     "deploy": "wrangler deploy",
     "test": "vitest run",
     "test:watch": "vitest",
