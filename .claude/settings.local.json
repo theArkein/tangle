@@ -19,7 +19,25 @@
       "Bash(curl -s --max-time 8 http://localhost:3000/mockup)",
       "Bash(curl -v --max-time 8 http://localhost:3000/mockup)",
       "Bash(curl -Ls --max-time 8 http://localhost:3000/mockup/)",
-      "Bash(curl -s http://localhost:3000/mockup/)"
+      "Bash(curl -s http://localhost:3000/mockup/)",
+      "Bash(npm test *)",
+      "Bash(npx vitest *)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(gh pr create --title 'feat: gameplay redesign — 7 deterministic power-ups, new scoring, duel/classic modes' --body ' *)",
+      "Bash(gh pr edit 46 --body ' *)",
+      "Bash(gh pr *)",
+      "Bash(gh run *)",
+      "Bash(git rebase *)",
+      "Bash(git stash *)",
+      "Bash(echo \"Frontend PID: $!\")",
+      "Bash(volta run *)",
+      "Bash(echo \"Worker PID: $!\")",
+      "Bash(lsof -ti:8787)",
+      "Bash(xargs kill *)",
+      "Bash(git pull *)"
     ]
   }
 }

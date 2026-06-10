@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, startTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Button from '@/components/ui/Button'
@@ -51,11 +51,11 @@ export default function LobbyPage() {
   const [phase, setPhase] = useState<Phase>('idle')
   const [token, setToken] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
-  const [mode, setMode] = useState<GameMode>(() => {
-    if (typeof window === 'undefined') return 'duel'
+  const [mode, setMode] = useState<GameMode>('duel')
+  useEffect(() => {
     const stored = localStorage.getItem('game_mode')
-    return (stored === 'duel' || stored === 'classic') ? stored : 'duel'
-  })
+    if (stored === 'duel' || stored === 'classic') startTransition(() => setMode(stored))
+  }, [])
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, startTransition } from 'react'
 
 export type SoundName = 'word_valid' | 'word_invalid' | 'turn_start' | 'opp_turn' | 'danger_zone' |
   'power_earned' | 'power_used_me' | 'power_used_opp' | 'round_win' | 'match_win' |
@@ -61,11 +61,17 @@ function getSoundEngine(): Record<SoundName, () => void> {
 }
 
 export function useSoundEngine() {
-  const [muted, setMutedState] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false
-    return localStorage.getItem('sfx_muted') === '1'
-  })
-  const mutedRef = useRef(muted)
+  const [muted, setMutedState] = useState(false)
+  const mutedRef = useRef(false)
+
+  useEffect(() => {
+    const stored = localStorage.getItem('sfx_muted')
+    if (stored !== null) {
+      const v = stored === '1'
+      mutedRef.current = v
+      startTransition(() => setMutedState(v))
+    }
+  }, [])
 
   useEffect(() => {
     mutedRef.current = muted

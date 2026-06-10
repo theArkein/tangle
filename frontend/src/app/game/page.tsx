@@ -424,12 +424,12 @@ function GameContent() {
   useEffect(() => {
     if (matchState?.status !== 'round_active') return
     const maxSecs = timerMaxSecs
-    const id = setInterval(() => {
-      setTimeLeft(Math.max(0, maxSecs - (Date.now() - turnStartAtRef.current) / 1000))
-    }, 250)
+    const calc = () => Math.max(0, maxSecs - (Date.now() - turnStartAtRef.current) / 1000)
+    setTimeLeft(calc())
+    const id = setInterval(() => setTimeLeft(calc()), 250)
     return () => clearInterval(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matchState?.status, matchState?.gameMode, timerMaxSecs])
+  }, [matchState?.status, matchState?.gameMode, timerMaxSecs, matchState?.currentRound?.currentPlayerId])
 
   // Next-round countdown ticker
   useEffect(() => {
@@ -475,7 +475,7 @@ function GameContent() {
   useEffect(() => {
     if (matchState?.status !== 'round_active') { timeWarnFiredRef.current = false; return }
     const warnAt = inDangerZoneRef.current ? 3 : 5
-    if (timeLeft <= warnAt && !timeWarnFiredRef.current) {
+    if (timeLeft > 0 && timeLeft <= warnAt && !timeWarnFiredRef.current) {
       timeWarnFiredRef.current = true
       playRef.current('time_warn')
       setActiveToast({ id: ++toastIdRef.current, variant: 'time_warn', title: `${warnAt} seconds left!` })

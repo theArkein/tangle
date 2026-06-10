@@ -41,7 +41,7 @@ const REMATCH_TIMEOUT_MS = 30_000;
 const NEXT_ROUND_TIMEOUT_MS = 30_000;
 const SEED_LETTERS = "abcdefghijklmnoprstw";
 
-type AlarmKind = "turn" | "rematch" | "next_round" | "bot_turn";
+type AlarmKind = "turn" | "rematch" | "next_round" | "bot_turn" | "disconnect";
 
 function randomSeedLetter(): string {
   return SEED_LETTERS[Math.floor(Math.random() * SEED_LETTERS.length)] ?? "a";
@@ -57,6 +57,7 @@ interface RoomStorage {
   rematchRequests: string[];
   alarmKind?: AlarmKind | undefined;
   turnStartAt?: number | undefined;
+  pendingDisconnect?: { playerId: string; expiresAt: number };
   gameMode?: GameMode | undefined;
   botPlayerId?: string | undefined;
 }
@@ -168,6 +169,19 @@ export class GameRoom implements DurableObject {
       await this.startMatch(stored);
     } else if (stored.matchState) {
       this.broadcastStateToPlayer(server, playerId, stored);
+      // Clear grace period if this player is reconnecting mid-game
+      if (stored.pendingDisconnect?.playerId === playerId) {
+        delete stored.pendingDisconnect;
+        if (stored.alarmKind === "disconnect" && stored.matchState.status === "round_active" && stored.matchState.currentRound) {
+          const round = stored.matchState.currentRound;
+          const inDZ = this.dangerZoneEnabled && round.chain.length >= DANGER_ZONE_CHAIN_THRESHOLD;
+          const modeConfig = getModeConfig(stored.matchState.gameMode);
+          const timeoutMs = inDZ ? DANGER_ZONE_TIMER_MS : modeConfig.turnTimeoutMs;
+          await this.setAlarm(stored, "turn", (stored.turnStartAt ?? Date.now()) + timeoutMs);
+        } else {
+          await this.saveRoom(stored);
+        }
+      }
     } else {
       server.send(
         JSON.stringify({
@@ -560,21 +574,30 @@ export class GameRoom implements DurableObject {
 
   async webSocketClose(ws: WebSocket): Promise<void> {
     const playerId = this.state.getTags(ws)[0];
-    if (playerId) {
-      this.broadcastExcept(
-        playerId,
-        JSON.stringify({ type: "opponent_disconnected" })
-      );
-    }
+    if (playerId) await this.handlePlayerDisconnect(playerId);
   }
 
   async webSocketError(ws: WebSocket): Promise<void> {
     const playerId = this.state.getTags(ws)[0];
-    if (playerId) {
-      this.broadcastExcept(
-        playerId,
-        JSON.stringify({ type: "opponent_disconnected" })
-      );
+    if (playerId) await this.handlePlayerDisconnect(playerId);
+  }
+
+  private async handlePlayerDisconnect(playerId: string): Promise<void> {
+    const stored = await this.loadRoom();
+    // Only apply grace period during active rounds
+    if (!stored.matchState || stored.matchState.status !== "round_active") {
+      this.broadcastExcept(playerId, JSON.stringify({ type: "opponent_disconnected" }));
+      return;
+    }
+    const GRACE_MS = 10_000;
+    const expiresAt = Date.now() + GRACE_MS;
+    stored.pendingDisconnect = { playerId, expiresAt };
+    const currentAlarm = await this.state.storage.getAlarm();
+    if (currentAlarm === null || currentAlarm > expiresAt) {
+      await this.setAlarm(stored, "disconnect", expiresAt);
+    } else {
+      // Turn alarm fires sooner — it will flush the pending disconnect
+      await this.saveRoom(stored);
     }
   }
 
@@ -582,6 +605,27 @@ export class GameRoom implements DurableObject {
     const stored = await this.loadRoom();
     const kind = stored.alarmKind;
     stored.alarmKind = undefined;
+
+    if (kind === "disconnect") {
+      const pd = stored.pendingDisconnect;
+      delete stored.pendingDisconnect;
+      await this.saveRoom(stored);
+      if (!pd) return;
+      const isConnected = this.state.getWebSockets(pd.playerId).length > 0;
+      if (isConnected) {
+        // Player reconnected within grace period — reschedule the turn alarm
+        if (stored.matchState?.status === "round_active" && stored.matchState.currentRound) {
+          const round = stored.matchState.currentRound;
+          const inDZ = this.dangerZoneEnabled && round.chain.length >= DANGER_ZONE_CHAIN_THRESHOLD;
+          const modeConfig = getModeConfig(stored.matchState.gameMode);
+          const timeoutMs = inDZ ? DANGER_ZONE_TIMER_MS : modeConfig.turnTimeoutMs;
+          await this.setAlarm(stored, "turn", (stored.turnStartAt ?? Date.now()) + timeoutMs);
+        }
+      } else {
+        this.broadcastExcept(pd.playerId, JSON.stringify({ type: "opponent_disconnected" }));
+      }
+      return;
+    }
 
     if (kind === "bot_turn") {
       await this.handleBotTurn(stored);
@@ -671,6 +715,7 @@ export class GameRoom implements DurableObject {
       stored.matchState = slResult.state;
       await this.saveRoom(stored);
       await this.applyEffects(slResult.effects, stored);
+      await this.flushExpiredDisconnect(stored);
       return;
     }
 
@@ -685,6 +730,18 @@ export class GameRoom implements DurableObject {
 
     await this.saveRoom(stored);
     await this.applyEffects(result.effects, stored);
+    await this.flushExpiredDisconnect(stored);
+  }
+
+  private async flushExpiredDisconnect(stored: RoomStorage): Promise<void> {
+    const pd = stored.pendingDisconnect;
+    if (!pd || pd.expiresAt > Date.now()) return;
+    delete stored.pendingDisconnect;
+    await this.saveRoom(stored);
+    if (stored.matchState?.status !== "round_active") return;
+    if (this.state.getWebSockets(pd.playerId).length === 0) {
+      this.broadcastExcept(pd.playerId, JSON.stringify({ type: "opponent_disconnected" }));
+    }
   }
 
   private async handleBotTurn(stored: RoomStorage): Promise<void> {

@@ -199,7 +199,7 @@ export function transition(state: MatchState, event: MatchEvent): TransitionResu
 
       return {
         state: newState,
-        effects: [{ type: "broadcastState" }, { type: "startTimer" }],
+        effects: [{ type: "startTimer" }, { type: "broadcastState" }],
       };
     }
 
@@ -239,7 +239,7 @@ export function transition(state: MatchState, event: MatchEvent): TransitionResu
 
       return {
         state: newState,
-        effects: [{ type: "broadcastState" }, { type: "startTimer" }],
+        effects: [{ type: "startTimer" }, { type: "broadcastState" }],
       };
     }
 
@@ -261,7 +261,7 @@ export function transition(state: MatchState, event: MatchEvent): TransitionResu
       if (event.secondLifeConsumed) {
         return {
           state,
-          effects: [{ type: "broadcastState" }, { type: "stopTimer" }, { type: "startTimer" }],
+          effects: [{ type: "stopTimer" }, { type: "startTimer" }, { type: "broadcastState" }],
         };
       }
 
@@ -311,9 +311,9 @@ export function transition(state: MatchState, event: MatchEvent): TransitionResu
       return {
         state: newState,
         effects: [
-          { type: "broadcastState" },
           { type: "stopNextRoundTimeout" },
           { type: "startTimer" },
+          { type: "broadcastState" },
         ],
       };
     }
