@@ -76,7 +76,7 @@ interface RoundHistoryEntry {
 }
 
 type ServerMsg =
-  | { type: 'state_update'; state: MatchState; scores: Record<string, number>; roundHistory: RoundHistoryEntry[]; turnStartAt?: number; serverNow?: number }
+  | { type: 'state_update'; state: MatchState; scores: Record<string, number>; roundHistory: RoundHistoryEntry[]; turnStartAt?: number; serverNow?: number; dangerZoneEnabled?: boolean }
   | { type: 'waiting'; playerCount: number; mode?: GameMode }
   | { type: 'word_result'; valid: true; points: number; breakdown: { base: number; rareTier1: number; rareTier2: number; rareTier3: number; longWord: number }; multiplier?: number }
   | { type: 'word_result'; valid: false; reason: string }
@@ -186,6 +186,7 @@ function GameContent() {
   const [roundHistory, setRoundHistory] = useState<RoundHistoryEntry[]>([])
   const [gameScores, setGameScores] = useState<Record<string, number>>({})
   const [rematchState, setRematchState] = useState<'idle' | 'pending'>('idle')
+  const [dangerZoneEnabled, setDangerZoneEnabled] = useState(false)
   const [showLinkPrompt, setShowLinkPrompt] = useState(false)
   const [showInstallPrompt, setShowInstallPrompt] = useState(false)
   const [myHighlights, setMyHighlights] = useState<Partial<Record<PowerUpId, 'earned' | 'activated'>>>({})
@@ -206,11 +207,20 @@ function GameContent() {
   useEffect(() => { playRef.current = play }, [play])
   useEffect(() => { setIsMobile(navigator.maxTouchPoints > 0) }, [])
   useEffect(() => {
-    if (!isMobile || submitting) return
+    if (submitting) return
     if (matchState?.currentRound?.currentPlayerId === myId) {
       inputRef.current?.focus()
     }
-  }, [isMobile, matchState?.currentRound?.currentPlayerId, myId, submitting])
+  }, [matchState?.currentRound?.currentPlayerId, myId, submitting])
+
+  // Keep focus on input whenever it's my turn — even if user clicks elsewhere
+  useEffect(() => {
+    const isMyTurn = matchState?.currentRound?.currentPlayerId === myId
+    if (!isMyTurn || submitting) return
+    const handler = () => { setTimeout(() => inputRef.current?.focus(), 0) }
+    document.addEventListener('pointerdown', handler)
+    return () => document.removeEventListener('pointerdown', handler)
+  }, [matchState?.currentRound?.currentPlayerId, myId, submitting])
 
   useEffect(() => {
     if (!activeToast) return
@@ -406,6 +416,7 @@ function GameContent() {
         setWaitingCount(null)
         setMatchState(state)
         setSubmitting(false)
+        if (msg.dangerZoneEnabled != null) setDangerZoneEnabled(msg.dangerZoneEnabled)
         return
       }
     }
@@ -419,7 +430,7 @@ function GameContent() {
   // Use DZ-aware max: DZ timeout is always 10s regardless of game mode
   const DZ_TIMER_SECS = 10
   const currentChainLength = matchState?.currentRound?.chain.length ?? 0
-  const currentlyInDZ = currentChainLength >= 16
+  const currentlyInDZ = dangerZoneEnabled && currentChainLength >= 16
   const timerMaxSecs = currentlyInDZ ? DZ_TIMER_SECS : (MODE_CONFIG[matchState?.gameMode ?? 'duel'].turnSeconds)
   useEffect(() => {
     if (matchState?.status !== 'round_active') return
@@ -820,7 +831,7 @@ function GameContent() {
   const emptyInv: PowerUpInventory = { freeze: 0, secondLife: 0, letterBomb: 0, double: 0, wild: 0, anchor: 0, tax: 0 }
   const myInventory: PowerUpInventory = round.powerUpInventory[myId] ?? emptyInv
   const opponentInventory: PowerUpInventory = round.powerUpInventory[opponentId] ?? emptyInv
-  const inDangerZone = round.chain.length >= 16
+  const inDangerZone = dangerZoneEnabled && round.chain.length >= 16
   inDangerZoneRef.current = inDangerZone
   const timerPct = (timeLeft / timerMaxSecs) * 100
   const timerUrgent = timeLeft <= 5 || inDangerZone
@@ -942,13 +953,13 @@ function GameContent() {
           {/* Score gap indicator — Duel mode */}
           {showScoreGap && (
             <div style={{
-              fontSize: 9,
+              fontSize: 20,
               fontFamily: 'var(--font-mono)',
-              fontWeight: 700,
+              fontWeight: 800,
               marginTop: 3,
-              color: scoreGap > 0 ? 'var(--p1)' : scoreGap < 0 ? 'var(--p2)' : 'var(--n400)',
+              color: scoreGap > 0 ? 'var(--success)' : scoreGap < 0 ? 'var(--danger)' : 'var(--n400)',
             }}>
-              {scoreGap > 0 ? `↑${scoreGap}` : scoreGap < 0 ? `↓${Math.abs(scoreGap)}` : '–'}
+              {scoreGap > 0 ? `▲${scoreGap}` : scoreGap < 0 ? `▼${Math.abs(scoreGap)}` : '–'}
             </div>
           )}
         </div>

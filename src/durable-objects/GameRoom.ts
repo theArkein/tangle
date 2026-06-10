@@ -992,6 +992,7 @@ export class GameRoom implements DurableObject {
           roundHistory: stored.roundHistory,
           turnStartAt: stored.turnStartAt,
           serverNow: Date.now(),
+          dangerZoneEnabled: this.dangerZoneEnabled,
         })
       );
     } catch {
