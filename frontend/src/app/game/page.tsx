@@ -524,12 +524,12 @@ function GameContent() {
 
   // Auto-rematch for bot matches
   useEffect(() => {
-    if (matchState?.status !== 'match_complete') return
+    if (matchState?.status !== 'match_complete' || !myId) return
     const opId = matchState.player1Id === myId ? matchState.player2Id : matchState.player1Id
     if (opId !== 'bot') return
     sendRematchRequest()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matchState?.status])
+  }, [matchState?.status, myId])
 
   // Show Google link prompt once after first match win
   useEffect(() => {
@@ -641,6 +641,16 @@ function GameContent() {
     const won = matchState.matchWinnerId === myId
     const opponentId = matchState.player1Id === myId ? matchState.player2Id : matchState.player1Id
     const isBotMatch = opponentId === 'bot'
+
+    // For bot matches, skip the result screen — rematch fires automatically
+    if (isBotMatch) {
+      return (
+        <div style={S.centeredFull}>
+          <div style={{ width: 28, height: 28, border: '3px solid var(--n200)', borderTopColor: 'var(--n900)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )
+    }
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--n0)' }}>
