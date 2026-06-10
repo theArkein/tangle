@@ -165,7 +165,7 @@ function GameContent() {
   const [keyboardVisible, setKeyboardVisible] = useState(true)
   const [activeToast, setActiveToast] = useState<{ id: number; variant: ToastVariant; subText?: string } | null>(null)
   const toastIdRef = useRef(0)
-  const [powerNotifs, setPowerNotifs] = useState<Array<{ id: number; text: string; desc: string; byMe: boolean }>>([])
+  const [powerNotifs, setPowerNotifs] = useState<Array<{ id: number; emoji: string; title: string; desc: string; byMe: boolean }>>([])
   const notifIdRef = useRef(0)
   const [reactionsOpen, setReactionsOpen] = useState(false)
 
@@ -268,7 +268,7 @@ function GameContent() {
         const pLabel = POWER_UP_LABELS[msg.powerup]
         const pDesc = POWER_DESC[msg.powerup]
         const nid = ++notifIdRef.current
-        setPowerNotifs(prev => [...prev, { id: nid, text: `🎁 ${pLabel?.name}`, desc: isMe ? (pDesc?.own ?? '') : (pDesc?.opp ?? ''), byMe: isMe }])
+        setPowerNotifs(prev => [...prev, { id: nid, emoji: pLabel?.emoji ?? '', title: `${isMe ? 'You' : 'Opponent'} picked up ${pLabel?.name}`, desc: isMe ? (pDesc?.own ?? '') : (pDesc?.opp ?? ''), byMe: isMe }])
         setTimeout(() => setPowerNotifs(prev => prev.filter(n => n.id !== nid)), 2500)
         playRef.current(isMe ? 'power_earned' : 'opp_turn')
         return
@@ -282,7 +282,7 @@ function GameContent() {
         const pLabel2 = POWER_UP_LABELS[msg.powerup]
         const pDesc2 = POWER_DESC[msg.powerup]
         const nid2 = ++notifIdRef.current
-        setPowerNotifs(prev => [...prev, { id: nid2, text: `${pLabel2?.emoji} ${pLabel2?.name}`, desc: isMe ? (pDesc2?.own ?? '') : (pDesc2?.opp ?? ''), byMe: isMe }])
+        setPowerNotifs(prev => [...prev, { id: nid2, emoji: pLabel2?.emoji ?? '', title: `${isMe ? 'You' : 'Opponent'} activated ${pLabel2?.name}`, desc: isMe ? (pDesc2?.own ?? '') : (pDesc2?.opp ?? ''), byMe: isMe }])
         setTimeout(() => setPowerNotifs(prev => prev.filter(n => n.id !== nid2)), 2500)
         playRef.current(isMe ? 'power_used_me' : 'power_used_opp')
         return
@@ -296,7 +296,7 @@ function GameContent() {
         const slLabel = POWER_UP_LABELS.secondLife
         const slDesc = isMe ? (POWER_DESC.secondLife?.own ?? '') : (POWER_DESC.secondLife?.opp ?? '')
         const nid3 = ++notifIdRef.current
-        setPowerNotifs(prev => [...prev, { id: nid3, text: `${slLabel.emoji} ${slLabel.name}`, desc: slDesc, byMe: isMe }])
+        setPowerNotifs(prev => [...prev, { id: nid3, emoji: slLabel.emoji, title: `${isMe ? 'You' : 'Opponent'} activated ${slLabel.name}`, desc: slDesc, byMe: isMe }])
         setTimeout(() => setPowerNotifs(prev => prev.filter(n => n.id !== nid3)), 2500)
         playRef.current(isMe ? 'power_used_me' : 'power_used_opp')
         return
@@ -334,7 +334,7 @@ function GameContent() {
         const swapLabel = POWER_UP_LABELS.swap
         const swapDesc = isMe ? (POWER_DESC.swap?.own ?? '') : (POWER_DESC.swap?.opp ?? '')
         const swapId = ++notifIdRef.current
-        setPowerNotifs(prev => [...prev, { id: swapId, text: `${swapLabel.emoji} ${swapLabel.name}`, desc: swapDesc, byMe: isMe }])
+        setPowerNotifs(prev => [...prev, { id: swapId, emoji: swapLabel.emoji, title: `${isMe ? 'You' : 'Opponent'} activated ${swapLabel.name}`, desc: swapDesc, byMe: isMe }])
         setTimeout(() => setPowerNotifs(prev => prev.filter(n => n.id !== swapId)), 2500)
         playRef.current(isMe ? 'power_used_me' : 'power_used_opp')
         return
@@ -862,17 +862,29 @@ function GameContent() {
         </div>
       )}
 
-      {/* Toast overlay */}
-      {activeToast && (
-        <div style={{ position: 'fixed', top: 12, left: 0, right: 0, zIndex: 60, pointerEvents: 'none', display: 'flex', justifyContent: 'center', padding: '0 14px' }}>
-          <div style={{ pointerEvents: 'auto', width: '100%', maxWidth: 300 }}>
-            <GameToast
-              key={activeToast.id}
-              variant={activeToast.variant}
-              subText={activeToast.subText}
-              onDismiss={() => setActiveToast(null)}
-            />
-          </div>
+      {/* Notification overlay — power notifs + toast, all centered top */}
+      {(powerNotifs.length > 0 || activeToast) && (
+        <div style={{ position: 'fixed', top: 12, left: 0, right: 0, zIndex: 60, pointerEvents: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '0 14px' }}>
+          {powerNotifs.map(n => (
+            <div key={n.id} style={{ background: 'var(--n800)', color: 'var(--n0)', padding: '6px 10px 6px 8px', borderRadius: 'var(--radius-md)', borderLeft: `7px solid ${n.byMe ? 'var(--p1)' : 'var(--p2)'}`, animation: 'notifFade 2.5s ease-out forwards', maxWidth: 260, width: '100%', display: 'flex', alignItems: 'center', gap: 8, pointerEvents: 'auto' }}>
+              <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>{n.emoji}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-heading)', lineHeight: 1.2, color: n.byMe ? 'var(--p1)' : 'var(--p2)' }}>{n.title}</div>
+                <div style={{ fontSize: 10, opacity: 0.7, marginTop: 2, fontFamily: 'var(--font-body)', lineHeight: 1.3 }}>{n.desc}</div>
+              </div>
+              <button onClick={() => setPowerNotifs(prev => prev.filter(p => p.id !== n.id))} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', fontSize: 11, lineHeight: 1, color: 'rgba(255,255,255,0.5)', flexShrink: 0 }}>✕</button>
+            </div>
+          ))}
+          {activeToast && (
+            <div style={{ pointerEvents: 'auto', width: '100%', maxWidth: 260 }}>
+              <GameToast
+                key={activeToast.id}
+                variant={activeToast.variant}
+                subText={activeToast.subText}
+                onDismiss={() => setActiveToast(null)}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -1038,28 +1050,6 @@ function GameContent() {
           <div style={{ position: 'absolute', top: 8, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 8, pointerEvents: 'none' }}>
             {reactionFeed.map(r => (
               <div key={r.id} style={{ fontSize: 28, animation: 'reactionFloat 3s ease-out forwards' }}>{r.emoji}</div>
-            ))}
-          </div>
-        )}
-
-        {/* Power-up notifications — top-left (mine) / top-right (opp) */}
-        {powerNotifs.filter(n => n.byMe).length > 0 && (
-          <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', flexDirection: 'column', gap: 4, pointerEvents: 'none', maxWidth: 160, zIndex: 10 }}>
-            {powerNotifs.filter(n => n.byMe).map(n => (
-              <div key={n.id} style={{ background: 'var(--n800)', color: 'var(--n0)', padding: '5px 9px', borderRadius: 'var(--radius-md)', animation: 'notifFade 2.5s ease-out forwards' }}>
-                <div style={{ fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-heading)', lineHeight: 1.2 }}>{n.text}</div>
-                <div style={{ fontSize: 10, opacity: 0.7, marginTop: 2, fontFamily: 'var(--font-body)', lineHeight: 1.3 }}>{n.desc}</div>
-              </div>
-            ))}
-          </div>
-        )}
-        {powerNotifs.filter(n => !n.byMe).length > 0 && (
-          <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, pointerEvents: 'none', maxWidth: 160, zIndex: 10 }}>
-            {powerNotifs.filter(n => !n.byMe).map(n => (
-              <div key={n.id} style={{ background: 'var(--n700)', color: 'var(--n0)', padding: '5px 9px', borderRadius: 'var(--radius-md)', animation: 'notifFade 2.5s ease-out forwards', textAlign: 'right' }}>
-                <div style={{ fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-heading)', lineHeight: 1.2 }}>{n.text}</div>
-                <div style={{ fontSize: 10, opacity: 0.7, marginTop: 2, fontFamily: 'var(--font-body)', lineHeight: 1.3 }}>{n.desc}</div>
-              </div>
             ))}
           </div>
         )}
