@@ -442,6 +442,11 @@ export class GameRoom implements DurableObject {
 
     stored.rematchRequests.push(playerId);
 
+    // Bot auto-confirms rematch immediately
+    if (stored.botPlayerId && !stored.rematchRequests.includes(stored.botPlayerId)) {
+      stored.rematchRequests.push(stored.botPlayerId);
+    }
+
     if (stored.rematchRequests.length === 2) {
       await this.clearAlarm(stored);
       stored.rematchRequests = [];
