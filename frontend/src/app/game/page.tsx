@@ -216,6 +216,12 @@ function GameContent() {
   const playRef = useRef(play)
   useEffect(() => { playRef.current = play }, [play])
   useEffect(() => { setIsMobile(navigator.maxTouchPoints > 0) }, [])
+  useEffect(() => {
+    if (!isMobile || submitting) return
+    if (matchState?.currentRound?.currentPlayerId === myId) {
+      inputRef.current?.focus()
+    }
+  }, [isMobile, matchState?.currentRound?.currentPlayerId, myId, submitting])
 
   useEffect(() => {
     if (!activeToast) return
@@ -224,6 +230,7 @@ function GameContent() {
   }, [activeToast?.id])
 
   const wsRef = useRef<WebSocket | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const chainScrollRef = useRef<HTMLDivElement>(null)
   const deferredInstallRef = useRef<BeforeInstallPromptEvent | null>(null)
   const prevStateRef = useRef<MatchState | null>(null)
@@ -1173,6 +1180,7 @@ function GameContent() {
         {/* Input row */}
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <input
+            ref={inputRef}
             type="text"
             value={wordInput}
             onChange={e => {
@@ -1186,6 +1194,7 @@ function GameContent() {
               if (e.key === 'Enter') { submitWord(); return }
               if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key.length === 1 || e.key === 'Backspace')) play('tap')
             }}
+            onBlur={() => { if (isMobile && isMyTurn && !submitting) setTimeout(() => inputRef.current?.focus(), 0) }}
             disabled={!isMyTurn || submitting}
             placeholder={isMyTurn ? (round.chain.length === 0 ? `Start with ${round.seedLetter.toUpperCase()}…` : `${nextSeed}…`) : 'Waiting…'}
             autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false}
