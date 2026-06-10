@@ -25,11 +25,11 @@ interface RecentMatch {
 }
 
 type Phase = 'idle' | 'waiting'
-type GameMode = 'classic' | 'speed_round'
+type GameMode = 'duel' | 'classic'
 
 const MODES: Record<GameMode, { label: string; detail: string }> = {
-  classic:     { label: 'Classic', detail: 'Best of 5 · 15s turns · power-ups' },
-  speed_round: { label: 'Speed',   detail: 'Single round · 8s turns · no power-ups' },
+  duel:    { label: 'Duel',    detail: 'Best of 5 · 25s turns · power-ups' },
+  classic: { label: 'Classic', detail: 'Single round · 8s turns · no power-ups' },
 }
 
 function relativeTime(ts: number): string {
@@ -54,7 +54,7 @@ export default function LobbyPage() {
   const [mode, setMode] = useState<GameMode>(() => {
     if (typeof window === 'undefined') return 'classic'
     const stored = localStorage.getItem('game_mode')
-    return (stored === 'speed_round' || stored === 'classic') ? stored : 'classic'
+    return (stored === 'duel' || stored === 'classic') ? stored : 'duel'
   })
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 

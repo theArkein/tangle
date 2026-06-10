@@ -52,8 +52,8 @@ Shield, Skip, Gamble, Lenient, Seal, Boost, Loop, Spin
 
 | Decision | Value |
 |---|---|
-| Match format | Open-ended — players decide how many rounds to play |
-| Round win condition | First player to lead by **59 points** wins the round (59 = T+A+N+G+L+E alphabet positions: 20+1+14+7+12+5) |
+| Match format | Open-ended — no fixed rounds |
+| Round win condition | First player to lead by **59 points** wins the round (59 = T+A+N+G+L+E alphabet positions: 20+1+14+7+12+5) OR First player to lose on timer loses the round|
 | Chain rule | Word must start with the last **1 letter** of the previous word (already implemented) |
 | Fault penalty | **−2 seconds** from turn timer per invalid word (replaces fault lives) |
 
@@ -63,14 +63,17 @@ Shield, Skip, Gamble, Lenient, Seal, Boost, Loop, Spin
 - Doesn't start with the required letter
 - Doesn't meet active power-up constraints (Letter Bomb, Anchor)
 
+While Should Invalid word toast show the specific reason in small description
 ---
 
 ## Timers
 
-| Mode | Turn Timer | Power-Ups |
+| Mode | Turn Timer | Power-Ups & Points |
 |---|---|---|
 | **Duel** (renamed from Classic) | 25 seconds | Enabled |
-| **Classic** (renamed from Speed Round) | 12 seconds | Disabled |
+| **Classic** (renamed from Speed Round) | 8 seconds | Disabled |
+
+No 59 points lead condition in Classic mode — round ends on timer loss. This keeps the fast-paced, high-pressure feel of the original Speed Round mode, while Duel mode offers a more strategic, power-up rich experience.
 
 ---
 
@@ -99,7 +102,7 @@ Shield, Skip, Gamble, Lenient, Seal, Boost, Loop, Spin
 | Triggers at | Chain reaches **16 words** |
 | Timer | **10 seconds** per turn |
 | Scoring | **2×** everything |
-| Power-up drop on entry | **None** — 2× scoring is the reward itself |
+| Power-up drop on entry | Second Life to both players — 2× scoring is the reward itself (not a power-up) |
 
 ---
 
@@ -109,7 +112,7 @@ Each trigger always earns one specific power-up. Players can strategise around e
 
 | Trigger | Earns | Notes |
 |---|---|---|
-| Every 25 points you score | ❄️ Freeze | Unlimited — every 25pt milestone (25, 50, 75, 100...) |
+| Every 25 points you score | ❄️ Freeze | Unlimited — every 20pt milestone (20, 40, 60, 80, 100...) |
 | Play a 10+ letter word | 🎯 Double | Any time |
 | Word contains Q, X, Z or J | 💣 Letter Bomb | Any time |
 | Play an 8+ letter word | ⚓ Anchor | Any time |
@@ -118,9 +121,10 @@ Each trigger always earns one specific power-up. Players can strategise around e
 | Single word scores 15+ points | 💚 Second Life | Any time |
 | Word uses 4+ different vowels | 💚 Second Life | Any time (e.g. sequoia, education) |
 | Word contains letters from 2+ rare tiers | 💚 Second Life | Any time (e.g. "quickly" = Q Tier 1 + K Tier 2) |
+| Enters DZ | 💚 Second Life | awarded to both players |
 
-> **Second Life** has 3 earning paths — any one triggers it.
-> **Activation:** auto-activates when timer hits 0 (saves the round), OR player can manually activate at any point during their turn. Either way → full timer reset to **25 seconds**.
+> **Second Life** has 3 earning paths + 1 DZ entry path — any one triggers it.
+> **Activation:** player should manually activate at any point during their turn. full timer reset to **25 seconds** or 10 seconds in Danger Zone.
 
 ---
 
@@ -155,13 +159,14 @@ Each trigger always earns one specific power-up. Players can strategise around e
 ### Second Life
 - Auto-activates when timer hits 0 (saves the round, player doesn't lose)
 - Can also be manually activated at any point during player's turn
-- On activation: full timer reset to 25 seconds
+- On activation: full timer reset to 25 seconds or 10 seconds in DZ, consume one Second Life from inventory
 
 ### Second Life Trigger Evaluation (per word submission)
-Check all 3 paths after each valid word:
+Check all 4 paths after each valid word:
 1. `scoreResult.points >= 15`
 2. `countUniqueVowels(word) >= 4`
 3. `hasLettersFromMultipleRareTiers(word, 2)`
+4. `enteredDangerZone`
 
 If any condition is true → award Second Life to that player.
 
@@ -172,13 +177,15 @@ If any condition is true → award Second Life to that player.
 ### Danger Zone
 - Chain threshold: 16 words (was 12)
 - Multiplier: 2× (was 3×)
-- No power-up drop on entry
+- second life awarded to both players on entry
 - Timer: 10 seconds per turn
 
 ### Round Win
 - Check after every word submission: if `(playerRoundScore - opponentRoundScore) >= 59`, round ends, player wins
 - No fallback needed — DZ (2× scoring at chain 16) and power-ups (Tax −10, Double 2×) naturally accelerate the gap
 - Replace fault-based round end logic
+
+Somewhere in players area show difference in score between players, so they can see how close they are to winning (or losing). This is especially important in Duel mode with the new 59 point lead condition. if loosing show in P2 color , if winning show in P1 color. 
 
 ---
 

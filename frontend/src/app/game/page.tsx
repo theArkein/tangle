@@ -416,15 +416,20 @@ function GameContent() {
   }, [myId, roomId, router])
 
   // Visual countdown ticker — updates every 250 ms
+  // Use DZ-aware max: DZ timeout is always 10s regardless of game mode
+  const DZ_TIMER_SECS = 10
+  const currentChainLength = matchState?.currentRound?.chain.length ?? 0
+  const currentlyInDZ = currentChainLength >= 16
+  const timerMaxSecs = currentlyInDZ ? DZ_TIMER_SECS : (MODE_CONFIG[matchState?.gameMode ?? 'duel'].turnSeconds)
   useEffect(() => {
     if (matchState?.status !== 'round_active') return
-    const mode = matchState.gameMode ?? 'duel'
-    const turnSecs = MODE_CONFIG[mode].turnSeconds
+    const maxSecs = timerMaxSecs
     const id = setInterval(() => {
-      setTimeLeft(Math.max(0, turnSecs - (Date.now() - turnStartAtRef.current) / 1000))
+      setTimeLeft(Math.max(0, maxSecs - (Date.now() - turnStartAtRef.current) / 1000))
     }, 250)
     return () => clearInterval(id)
-  }, [matchState?.status, matchState?.gameMode])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchState?.status, matchState?.gameMode, timerMaxSecs])
 
   // Next-round countdown ticker
   useEffect(() => {
@@ -817,7 +822,7 @@ function GameContent() {
   const opponentInventory: PowerUpInventory = round.powerUpInventory[opponentId] ?? emptyInv
   const inDangerZone = round.chain.length >= 16
   inDangerZoneRef.current = inDangerZone
-  const timerPct = (timeLeft / modeCfg.turnSeconds) * 100
+  const timerPct = (timeLeft / timerMaxSecs) * 100
   const timerUrgent = timeLeft <= 5 || inDangerZone
   const lastWord = round.chain[round.chain.length - 1]
   const nextSeed = lastWord ? lastWord.slice(-1).toUpperCase() : round.seedLetter.toUpperCase()
