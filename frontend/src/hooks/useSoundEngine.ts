@@ -55,7 +55,7 @@ function getSoundEngine(): Record<SoundName, () => void> {
     match_win()     { [523,659,784,1047].forEach((f,i)=>tone(f,.10,'sine',.22,i*.09)); tone(784,.20,'sine',.18,.72) },
     time_warn()     { [0,.16,.32].forEach(t0=>tone(880,.06,'square',.18,t0)) },
     reaction()      { tone(800,.07,'sine',.14,0); tone(1200,.10,'sine',.10,.05) },
-    tap()           { noise(.04,.05,0,1200) },
+    tap()           { noise(.02,.20,0,3000); noise(.05,.12,.01,280) },
   }
   return _engine
 }

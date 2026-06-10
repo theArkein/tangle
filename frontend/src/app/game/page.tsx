@@ -1172,32 +1172,26 @@ function GameContent() {
 
         {/* Input row */}
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          {isMobile ? (
-            <div style={{ ...S.input, flex: 1, display: 'flex', alignItems: 'center', opacity: !isMyTurn || submitting ? 0.45 : 1, cursor: 'default', fontSize: 13, padding: '7px 10px' }}>
-              {wordInput
-                ? <span style={{ color: 'var(--n900)' }}>{wordInput}<span style={{ animation: isMyTurn ? 'blink 1s step-end infinite' : 'none', opacity: 0.5 }}>|</span></span>
-                : <span style={{ color: 'var(--n400)' }}>{isMyTurn ? (round.chain.length === 0 ? `Start with ${round.seedLetter.toUpperCase()}…` : `${nextSeed}…`) : 'Waiting…'}</span>
+          <input
+            type="text"
+            value={wordInput}
+            onChange={e => {
+              const v = e.target.value
+              setWordInput(v)
+              if (wsRef.current?.readyState === WebSocket.OPEN && isMyTurn) {
+                wsRef.current.send(JSON.stringify({ type: 'typing_update', partial: v }))
               }
-            </div>
-          ) : (
-            <input
-              type="text"
-              value={wordInput}
-              onChange={e => {
-                const v = e.target.value
-                setWordInput(v)
-                if (wsRef.current?.readyState === WebSocket.OPEN && isMyTurn) {
-                  wsRef.current.send(JSON.stringify({ type: 'typing_update', partial: v }))
-                }
-              }}
-              onKeyDown={e => { if (e.key === 'Enter') submitWord() }}
-              disabled={!isMyTurn || submitting}
-              placeholder={isMyTurn ? (round.chain.length === 0 ? `Start with ${round.seedLetter.toUpperCase()}…` : `${nextSeed}…`) : 'Waiting…'}
-              autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false}
-              inputMode="text" enterKeyHint="send"
-              style={{ ...S.input, fontSize: 13, padding: '7px 10px', opacity: !isMyTurn || submitting ? 0.45 : 1, cursor: !isMyTurn || submitting ? 'not-allowed' : 'text' }}
-            />
-          )}
+            }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { submitWord(); return }
+              if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key.length === 1 || e.key === 'Backspace')) play('tap')
+            }}
+            disabled={!isMyTurn || submitting}
+            placeholder={isMyTurn ? (round.chain.length === 0 ? `Start with ${round.seedLetter.toUpperCase()}…` : `${nextSeed}…`) : 'Waiting…'}
+            autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false}
+            inputMode={isMobile ? 'none' : 'text'} enterKeyHint="send"
+            style={{ ...S.input, fontSize: 13, padding: '7px 10px', opacity: !isMyTurn || submitting ? 0.45 : 1, cursor: !isMyTurn || submitting ? 'not-allowed' : 'text' }}
+          />
           <Button variant="primary" size="sm" onClick={submitWord} disabled={!isMyTurn || submitting || !wordInput.trim()}>
             {submitting ? '…' : '→'}
           </Button>
