@@ -131,7 +131,7 @@ Shield, Skip, Gamble, Lenient, Seal, Tax, Boost, Loop, Spin
 - Chain threshold: 16 words (was 12)
 - Multiplier: 2× (was 3×)
 - No power-up drop on entry (was chaos pool drop)
-- Timer: TBD (currently 10s — discuss)
+- Timer: **10 seconds** (unchanged)
 
 ### Round Win
 - Check after every word submission: if playerRoundScore >= 100, round ends, player wins
