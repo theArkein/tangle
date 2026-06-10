@@ -53,7 +53,7 @@ Shield, Skip, Gamble, Lenient, Seal, Boost, Loop, Spin
 | Decision | Value |
 |---|---|
 | Match format | Open-ended — players decide how many rounds to play |
-| Round win condition | First to **100 points** wins the round |
+| Round win condition | First player to lead by **59 points** wins the round (59 = T+A+N+G+L+E alphabet positions: 20+1+14+7+12+5) |
 | Chain rule | Word must start with the last **1 letter** of the previous word (already implemented) |
 | Fault penalty | **−2 seconds** from turn timer per invalid word (replaces fault lives) |
 
@@ -109,7 +109,7 @@ Each trigger always earns one specific power-up. Players can strategise around e
 
 | Trigger | Earns | Notes |
 |---|---|---|
-| Reach 25 round points | ❄️ Freeze | Once per 25pt threshold (25, 50, 75...) |
+| Every 25 points you score | ❄️ Freeze | Resets per player (25, 50, 75...) |
 | Play a 10+ letter word | 🎯 Double | Any time |
 | Word contains Q, X, Z or J | 💣 Letter Bomb | Any time |
 | Play an 8+ letter word | ⚓ Anchor | Any time |
@@ -172,7 +172,8 @@ If any condition is true → award Second Life to that player.
 - Timer: 10 seconds per turn
 
 ### Round Win
-- Check after every word submission: if `playerRoundScore >= 100`, round ends, player wins
+- Check after every word submission: if `(playerRoundScore - opponentRoundScore) >= 59`, round ends, player wins
+- No fallback needed — DZ (2× scoring at chain 16) and power-ups (Tax −10, Double 2×) naturally accelerate the gap
 - Replace fault-based round end logic
 
 ---
