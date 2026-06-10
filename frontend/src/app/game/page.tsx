@@ -206,7 +206,7 @@ function GameContent() {
 
   const [isMobile, setIsMobile] = useState(false)
   const [keyboardVisible, setKeyboardVisible] = useState(true)
-  const [activeToast, setActiveToast] = useState<{ id: number; variant: ToastVariant; subText?: string } | null>(null)
+  const [activeToast, setActiveToast] = useState<{ id: number; variant: ToastVariant; subText?: string; title?: string } | null>(null)
   const toastIdRef = useRef(0)
   const [powerNotifs, setPowerNotifs] = useState<Array<{ id: number; emoji: string; title: string; desc: string; byMe: boolean }>>([])
   const notifIdRef = useRef(0)
@@ -503,7 +503,7 @@ function GameContent() {
     if (timeLeft <= warnAt && !timeWarnFiredRef.current) {
       timeWarnFiredRef.current = true
       playRef.current('time_warn')
-      setActiveToast({ id: ++toastIdRef.current, variant: 'time_warn' })
+      setActiveToast({ id: ++toastIdRef.current, variant: 'time_warn', title: `${warnAt} seconds left!` })
     }
     if (timeLeft > warnAt) timeWarnFiredRef.current = false
   }, [timeLeft, matchState?.status])
@@ -940,6 +940,7 @@ function GameContent() {
                 key={activeToast.id}
                 variant={activeToast.variant}
                 subText={activeToast.subText}
+                title={activeToast.title}
                 onDismiss={() => setActiveToast(null)}
               />
             </div>
