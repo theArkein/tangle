@@ -1,20 +1,15 @@
 'use client'
 
-export const TOAST_DURATION = 4000
+export const TOAST_DURATION = 2500
 
-export type ToastVariant = 'error' | 'success' | 'power_earned_me' | 'power_earned_opp' |
-  'power_used_me' | 'power_used_opp' | 'badge' | 'danger_zone' | 'time_warn'
+export type ToastVariant = 'error' | 'success' | 'badge' | 'danger_zone' | 'time_warn'
 
 const TOAST_CONFIGS: Record<ToastVariant, { icon: string; title: string; sub?: string; bg: string }> = {
-  error:            { icon: '✕',  title: 'Invalid word',             bg: '#991b1b' },
-  success:          { icon: '✓',  title: 'Nice!',                    bg: '#14532d' },
-  power_earned_me:  { icon: '🎁', title: 'Power earned!',            bg: 'var(--n900)' },
-  power_earned_opp: { icon: '👀', title: 'Opponent earned a power',  bg: 'var(--n700)' },
-  power_used_me:    { icon: '💣', title: 'Power activated!',         bg: '#4c1d95' },
-  power_used_opp:   { icon: '⚡', title: 'Opponent used a power!',   bg: '#1e3a8a' },
-  badge:            { icon: '🏅', title: 'Badge unlocked!',          bg: '#78350f' },
-  danger_zone:      { icon: '⚡', title: 'Danger Zone!',             sub: '3× scoring · 5s turns now', bg: '#7c2d12' },
-  time_warn:        { icon: '⏱', title: '3 seconds left!',          bg: '#991b1b' },
+  error:       { icon: '✕',  title: 'Invalid word',  bg: '#991b1b' },
+  success:     { icon: '✓',  title: 'Nice!',         bg: '#14532d' },
+  badge:       { icon: '🏅', title: 'Badge unlocked!', bg: '#78350f' },
+  danger_zone: { icon: '⚡', title: 'Danger Zone!',  sub: '3× scoring · 5s turns now', bg: '#7c2d12' },
+  time_warn:   { icon: '⏱', title: '3 seconds left!', bg: '#991b1b' },
 }
 
 interface GameToastProps {

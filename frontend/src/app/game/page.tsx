@@ -165,6 +165,8 @@ function GameContent() {
   const [keyboardVisible, setKeyboardVisible] = useState(true)
   const [activeToast, setActiveToast] = useState<{ id: number; variant: ToastVariant; subText?: string } | null>(null)
   const toastIdRef = useRef(0)
+  const [powerNotifs, setPowerNotifs] = useState<Array<{ id: number; text: string; desc: string; byMe: boolean }>>([])
+  const notifIdRef = useRef(0)
   const [reactionsOpen, setReactionsOpen] = useState(false)
 
   const { play, muted, setMuted } = useSoundEngine()
@@ -265,8 +267,9 @@ function GameContent() {
         setTimeout(() => setter(h => { const n = { ...h }; delete n[msg.powerup]; return n }), 1500)
         const pLabel = POWER_UP_LABELS[msg.powerup]
         const pDesc = POWER_DESC[msg.powerup]
-        const pSub = `${pLabel?.emoji} ${pLabel?.name} — ${isMe ? pDesc?.own : pDesc?.opp}`
-        setActiveToast({ id: ++toastIdRef.current, variant: isMe ? 'power_earned_me' : 'power_earned_opp', subText: pSub })
+        const nid = ++notifIdRef.current
+        setPowerNotifs(prev => [...prev, { id: nid, text: `🎁 ${pLabel?.name}`, desc: isMe ? (pDesc?.own ?? '') : (pDesc?.opp ?? ''), byMe: isMe }])
+        setTimeout(() => setPowerNotifs(prev => prev.filter(n => n.id !== nid)), 2500)
         playRef.current(isMe ? 'power_earned' : 'opp_turn')
         return
       }
@@ -278,8 +281,9 @@ function GameContent() {
         setTimeout(() => setter(h => { const n = { ...h }; delete n[msg.powerup]; return n }), 1000)
         const pLabel2 = POWER_UP_LABELS[msg.powerup]
         const pDesc2 = POWER_DESC[msg.powerup]
-        const pSub2 = `${pLabel2?.emoji} ${pLabel2?.name} — ${isMe ? pDesc2?.own : pDesc2?.opp}`
-        setActiveToast({ id: ++toastIdRef.current, variant: isMe ? 'power_used_me' : 'power_used_opp', subText: pSub2 })
+        const nid2 = ++notifIdRef.current
+        setPowerNotifs(prev => [...prev, { id: nid2, text: `${pLabel2?.emoji} ${pLabel2?.name}`, desc: isMe ? (pDesc2?.own ?? '') : (pDesc2?.opp ?? ''), byMe: isMe }])
+        setTimeout(() => setPowerNotifs(prev => prev.filter(n => n.id !== nid2)), 2500)
         playRef.current(isMe ? 'power_used_me' : 'power_used_opp')
         return
       }
@@ -290,8 +294,10 @@ function GameContent() {
         setter(h => ({ ...h, secondLife: 'activated' }))
         setTimeout(() => setter(h => { const n = { ...h }; delete n.secondLife; return n }), 1000)
         const slLabel = POWER_UP_LABELS.secondLife
-        const slSub = `${slLabel.emoji} ${slLabel.name} — ${isMe ? POWER_DESC.secondLife?.own : POWER_DESC.secondLife?.opp}`
-        setActiveToast({ id: ++toastIdRef.current, variant: isMe ? 'power_used_me' : 'power_used_opp', subText: slSub })
+        const slDesc = isMe ? (POWER_DESC.secondLife?.own ?? '') : (POWER_DESC.secondLife?.opp ?? '')
+        const nid3 = ++notifIdRef.current
+        setPowerNotifs(prev => [...prev, { id: nid3, text: `${slLabel.emoji} ${slLabel.name}`, desc: slDesc, byMe: isMe }])
+        setTimeout(() => setPowerNotifs(prev => prev.filter(n => n.id !== nid3)), 2500)
         playRef.current(isMe ? 'power_used_me' : 'power_used_opp')
         return
       }
@@ -325,7 +331,11 @@ function GameContent() {
 
       if (msg.type === 'swap_letter_chosen') {
         const isMe = msg.byPlayerId === myId
-        setActiveToast({ id: ++toastIdRef.current, variant: isMe ? 'power_used_me' : 'power_used_opp', subText: 'Swap' })
+        const swapLabel = POWER_UP_LABELS.swap
+        const swapDesc = isMe ? (POWER_DESC.swap?.own ?? '') : (POWER_DESC.swap?.opp ?? '')
+        const swapId = ++notifIdRef.current
+        setPowerNotifs(prev => [...prev, { id: swapId, text: `${swapLabel.emoji} ${swapLabel.name}`, desc: swapDesc, byMe: isMe }])
+        setTimeout(() => setPowerNotifs(prev => prev.filter(n => n.id !== swapId)), 2500)
         playRef.current(isMe ? 'power_used_me' : 'power_used_opp')
         return
       }
@@ -1032,6 +1042,28 @@ function GameContent() {
           </div>
         )}
 
+        {/* Power-up notifications — top-left (mine) / top-right (opp) */}
+        {powerNotifs.filter(n => n.byMe).length > 0 && (
+          <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', flexDirection: 'column', gap: 4, pointerEvents: 'none', maxWidth: 160, zIndex: 10 }}>
+            {powerNotifs.filter(n => n.byMe).map(n => (
+              <div key={n.id} style={{ background: 'var(--n800)', color: 'var(--n0)', padding: '5px 9px', borderRadius: 'var(--radius-md)', animation: 'notifFade 2.5s ease-out forwards' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-heading)', lineHeight: 1.2 }}>{n.text}</div>
+                <div style={{ fontSize: 10, opacity: 0.7, marginTop: 2, fontFamily: 'var(--font-body)', lineHeight: 1.3 }}>{n.desc}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {powerNotifs.filter(n => !n.byMe).length > 0 && (
+          <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, pointerEvents: 'none', maxWidth: 160, zIndex: 10 }}>
+            {powerNotifs.filter(n => !n.byMe).map(n => (
+              <div key={n.id} style={{ background: 'var(--n700)', color: 'var(--n0)', padding: '5px 9px', borderRadius: 'var(--radius-md)', animation: 'notifFade 2.5s ease-out forwards', textAlign: 'right' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-heading)', lineHeight: 1.2 }}>{n.text}</div>
+                <div style={{ fontSize: 10, opacity: 0.7, marginTop: 2, fontFamily: 'var(--font-body)', lineHeight: 1.3 }}>{n.desc}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Score / word floats */}
         {floats.filter(f => f.byMe).length > 0 && (
           <div style={{ position: 'absolute', bottom: 8, left: 14, display: 'flex', flexDirection: 'column-reverse', gap: 4, pointerEvents: 'none' }}>
@@ -1062,6 +1094,7 @@ function GameContent() {
           @keyframes wordShimmer { 0% { filter: brightness(1.6) saturate(1.5); transform: scale(1.05); } 100% { filter: brightness(1) saturate(1); transform: scale(1); } }
           @keyframes earnGlow { 0% { box-shadow: 0 0 0 2px #4caf50; } 60% { box-shadow: 0 0 8px 4px #4caf5088; } 100% { box-shadow: 0 0 0 2px #4caf50; } }
           @keyframes activateFlash { 0% { background: var(--accent-warm-faint); } 50% { background: #ffe09a; } 100% { background: var(--n0); } }
+          @keyframes notifFade { 0% { opacity: 0; transform: translateY(-4px); } 15% { opacity: 1; transform: translateY(0); } 85% { opacity: 1; } 100% { opacity: 0; } }
         `}</style>
       </div>
 
