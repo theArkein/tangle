@@ -522,6 +522,15 @@ function GameContent() {
     playRef.current('reaction')
   }, [])
 
+  // Auto-rematch for bot matches
+  useEffect(() => {
+    if (matchState?.status !== 'match_complete') return
+    const opId = matchState.player1Id === myId ? matchState.player2Id : matchState.player1Id
+    if (opId !== 'bot') return
+    sendRematchRequest()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchState?.status])
+
   // Show Google link prompt once after first match win
   useEffect(() => {
     if (
@@ -758,57 +767,6 @@ function GameContent() {
     )
   }
 
-  // ── Round complete — Play Again gate ─────────────────────────────────────
-
-  if (matchState.status === 'round_complete') {
-    const ctx = matchState.roundEndContext
-    const opponentId = matchState.player1Id === myId ? matchState.player2Id : matchState.player1Id
-    const myWins = matchState.roundWins[myId] ?? 0
-    const oppWins = matchState.roundWins[opponentId] ?? 0
-    const iWonRound = ctx?.winnerId === myId
-    const iConfirmed = ctx?.nextRoundConfirmations.includes(myId) ?? false
-    const opponentConfirmed = ctx?.nextRoundConfirmations.includes(opponentId) ?? false
-
-    return (
-      <div style={{ ...S.page, justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
-        <div style={{ width: '100%', maxWidth: 420, background: 'var(--n0)', border: '1px solid var(--n200)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.08)' }}>
-          <div style={{ fontSize: '32px', marginBottom: '8px' }}>{iWonRound ? '🎉' : '😤'}</div>
-          <p style={{ fontSize: '12px', fontWeight: 500, color: 'var(--n400)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
-            Round {ctx?.roundNumber ?? '?'} complete
-          </p>
-          <p style={{ fontFamily: 'var(--font-display)', fontSize: '22px', color: 'var(--n900)', marginBottom: '4px' }}>
-            {iWonRound ? 'You won the round!' : 'Opponent won the round'}
-          </p>
-          {/* Round progress dots */}
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: '20px' }}>
-            {[1, 2, 3, 4, 5].map(r => {
-              const myWon = r <= myWins
-              const oppWon = r <= oppWins && r > myWins
-              const isCurrent = r === (ctx?.roundNumber ?? 0)
-              return (
-                <div key={r} style={{ width: 34, height: 34, borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-mono)', background: myWon ? 'var(--p1-light)' : oppWon ? 'var(--p2-light)' : 'var(--n100)', color: myWon ? 'var(--p1)' : oppWon ? 'var(--p2)' : 'var(--n400)', border: `1px solid ${isCurrent ? (iWonRound ? 'var(--p1)' : 'var(--p2)') : 'transparent'}`, opacity: r > (ctx?.roundNumber ?? 0) ? 0.4 : 1 }}>
-                  {r <= (ctx?.roundNumber ?? 0) ? (myWon ? 'W' : 'L') : r}
-                </div>
-              )
-            })}
-          </div>
-
-          <Button variant="primary" size="lg" full onClick={sendNextRoundRequest} disabled={iConfirmed}>
-            {iConfirmed ? 'Ready ✓' : 'Play Again'}
-          </Button>
-          <Button variant="secondary" size="lg" full onClick={() => { window.location.href = '/' }}>Back to Lobby</Button>
-
-          <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--n500)' }}>
-            {opponentConfirmed ? 'Opponent is ready' : 'Waiting on opponent…'}
-            <span style={{ marginLeft: '8px', fontFamily: 'var(--font-mono)', color: nextRoundTimeLeft <= 5 ? 'var(--danger)' : 'var(--n400)' }}>
-              {Math.ceil(nextRoundTimeLeft)}s
-            </span>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   // ── Round active ─────────────────────────────────────────────────────────
 
   const round = matchState.currentRound
@@ -824,8 +782,6 @@ function GameContent() {
   const isMyTurn = round.currentPlayerId === myId
   const opponentId = matchState.player1Id === myId ? matchState.player2Id : matchState.player1Id
   const opponentName = opponentId === 'bot' ? 'Bot' : 'Opponent'
-  const myWins = matchState.roundWins[myId] ?? 0
-  const oppWins = matchState.roundWins[opponentId] ?? 0
   const gameMode: GameMode = matchState.gameMode ?? 'duel'
   const modeCfg = MODE_CONFIG[gameMode]
   const emptyInv: PowerUpInventory = { freeze: 0, secondLife: 0, letterBomb: 0, double: 0, wild: 0, anchor: 0, tax: 0 }
@@ -948,8 +904,6 @@ function GameContent() {
         </div>
 
         <div style={{ textAlign: 'center', flexShrink: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--n800)', lineHeight: 1 }}>{myWins} – {oppWins}</div>
-          <div style={{ fontSize: 9, color: 'var(--n400)', letterSpacing: '0.06em', fontWeight: 600, marginTop: 2 }}>ROUNDS</div>
           {/* Score gap indicator — Duel mode */}
           {showScoreGap && (
             <div style={{
@@ -1183,6 +1137,37 @@ function GameContent() {
       {isMobile && isMyTurn && keyboardVisible && (
         <GameKeyboard onKey={handleGameKey} disabled={submitting} />
       )}
+
+      {/* ── Round complete modal ── */}
+      {matchState.status === 'round_complete' && (() => {
+        const ctx = matchState.roundEndContext
+        const iWonRound = ctx?.winnerId === myId
+        const iConfirmed = ctx?.nextRoundConfirmations.includes(myId) ?? false
+        const opponentConfirmed = ctx?.nextRoundConfirmations.includes(opponentId) ?? false
+        return (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}>
+            <div style={{ width: '100%', maxWidth: 360, background: 'var(--n0)', border: '1px solid var(--n200)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', textAlign: 'center', boxShadow: '0 16px 48px rgba(0,0,0,0.18)' }}>
+              <div style={{ fontSize: '36px', marginBottom: '10px' }}>{iWonRound ? '🎉' : '😤'}</div>
+              <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--n400)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
+                Round {ctx?.roundNumber ?? '?'} complete
+              </p>
+              <p style={{ fontFamily: 'var(--font-display)', fontSize: '22px', color: 'var(--n900)', marginBottom: '20px' }}>
+                {iWonRound ? 'You won the round!' : 'Opponent won the round'}
+              </p>
+              <Button variant="primary" size="lg" full onClick={sendNextRoundRequest} disabled={iConfirmed}>
+                {iConfirmed ? 'Ready ✓' : 'Play Again'}
+              </Button>
+              <Button variant="secondary" size="lg" full onClick={() => { window.location.href = '/' }}>Back to Lobby</Button>
+              <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--n500)' }}>
+                {opponentConfirmed ? 'Opponent is ready' : 'Waiting on opponent…'}
+                <span style={{ marginLeft: '8px', fontFamily: 'var(--font-mono)', color: nextRoundTimeLeft <= 5 ? 'var(--danger)' : 'var(--n400)' }}>
+                  {Math.ceil(nextRoundTimeLeft)}s
+                </span>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
