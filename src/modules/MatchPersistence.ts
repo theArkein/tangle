@@ -8,7 +8,7 @@ export interface WordEntry {
   word: string;
   playerId: string;
   points: number;
-  breakdown: { base: number; rareLetter: number; longWord: number };
+  breakdown: { base: number; rareTier1: number; rareTier2: number; rareTier3: number; longWord: number };
 }
 
 export interface RoundHistoryEntry {

@@ -7,7 +7,7 @@ export type ValidationResult =
         | "not_in_dictionary"
         | "duplicate"
         | "missing_required_letter"
-        | "exceeds_max_length";
+        | "below_min_length";
     };
 
 export interface Dictionary {
@@ -16,7 +16,9 @@ export interface Dictionary {
 
 export interface ValidateOptions {
   requiredContainingLetter?: string | undefined;
-  maxLength?: number | undefined;
+  minLength?: number | undefined;
+  // When true, skip the "must start with requiredLetter" check (Wild power-up).
+  skipLetterCheck?: boolean | undefined;
 }
 
 export async function validate(
@@ -29,7 +31,7 @@ export async function validate(
   const normalised = word.toLowerCase();
   const required = requiredLetter.toLowerCase();
 
-  if (normalised[0] !== required) {
+  if (!options.skipLetterCheck && normalised[0] !== required) {
     return { valid: false, reason: "wrong_start" };
   }
 
@@ -37,8 +39,8 @@ export async function validate(
     return { valid: false, reason: "duplicate" };
   }
 
-  if (options.maxLength !== undefined && normalised.length > options.maxLength) {
-    return { valid: false, reason: "exceeds_max_length" };
+  if (options.minLength !== undefined && normalised.length < options.minLength) {
+    return { valid: false, reason: "below_min_length" };
   }
 
   if (options.requiredContainingLetter) {

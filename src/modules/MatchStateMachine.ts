@@ -20,7 +20,6 @@ export interface RoundState {
   seedLetter: string;
   chain: string[];
   currentPlayerId: PlayerId;
-  faults: Record<PlayerId, number>;
   roundWinnerId?: PlayerId;
   playerRoundScores: Record<PlayerId, number>;
   powerUpInventory: Record<PlayerId, PowerUpInventory>;
@@ -47,13 +46,12 @@ export interface MatchState {
 
 export type MatchEvent =
   | { type: "start"; player1Id: PlayerId; player2Id: PlayerId; seedLetter: string; gameMode?: GameMode }
-  | { type: "wordSubmitted"; playerId: PlayerId; word: string; points: number; nextPlayerOverride?: PlayerId | undefined }
+  | { type: "wordSubmitted"; playerId: PlayerId; word: string; points: number }
   | { type: "invalidWord"; playerId: PlayerId }
   | { type: "turnTimeout"; playerId: PlayerId; secondLifeConsumed?: boolean }
   | { type: "nextRoundRequested"; playerId: PlayerId }
   | { type: "nextRoundTimeout"; absentPlayerId: PlayerId }
   | { type: "rematchRequested" }
-  | { type: "blockApplied"; byPlayerId: PlayerId }
   | { type: "inventoryUpdated"; playerId: PlayerId; inventory: PowerUpInventory }
   | { type: "scoreUpdated"; playerId: PlayerId; newRoundScore: number; newTriggers: DropTriggers }
   | { type: "effectsUpdated"; activeEffects: ActiveEffect[] };
@@ -71,9 +69,9 @@ export interface TransitionResult {
   effects: Effect[];
 }
 
-// Backward-compatible default — Classic mode value. New code should read from
-// gameModes.getModeConfig(state.gameMode).faultsToLoseRound.
-export const FAULTS_TO_LOSE_ROUND = 8;
+// Score gap required to win a round in Duel mode.
+export const ROUND_WIN_GAP = 59;
+
 const SEED_LETTERS = "abcdefghijklmnoprstw";
 
 function randomSeedLetter(): string {
@@ -96,7 +94,6 @@ function freshRound(
     seedLetter,
     chain: [],
     currentPlayerId: firstPlayerId,
-    faults: { [player1Id]: 0, [player2Id]: 0 },
     playerRoundScores: { [player1Id]: 0, [player2Id]: 0 },
     powerUpInventory: {
       [player1Id]: emptyInventory(),
@@ -120,7 +117,6 @@ function endRound(
   const roundsToWin = getModeConfig(state.gameMode).roundsToWinMatch;
 
   if (winnerRoundWins >= roundsToWin) {
-    // Match complete.
     const completedRound: RoundState | undefined = state.currentRound
       ? { ...state.currentRound, roundWinnerId: winnerId }
       : undefined;
@@ -150,7 +146,6 @@ function endRound(
     };
   }
 
-  // Non-terminal round end — enter round_complete and wait for Play Again confirmations.
   const completedRound: RoundState | undefined = state.currentRound
     ? { ...state.currentRound, roundWinnerId: winnerId }
     : undefined;
@@ -198,7 +193,7 @@ export function transition(state: MatchState, event: MatchEvent): TransitionResu
           [event.player1Id]: 0,
           [event.player2Id]: 0,
         },
-        gameMode: event.gameMode ?? state.gameMode ?? "classic",
+        gameMode: event.gameMode ?? state.gameMode ?? "duel",
         currentRound: round,
       };
 
@@ -214,12 +209,15 @@ export function transition(state: MatchState, event: MatchEvent): TransitionResu
       }
 
       const round = state.currentRound;
-      // Blitz can force the same player to play again.
-      const nextPlayerId = event.nextPlayerOverride ?? otherPlayer(state, event.playerId);
+      const nextPlayerId = otherPlayer(state, event.playerId);
+      const opponentId = nextPlayerId;
+
+      const newPlayerScore = (round.playerRoundScores[event.playerId] ?? 0) + event.points;
+      const opponentScore = round.playerRoundScores[opponentId] ?? 0;
 
       const updatedScores: Record<PlayerId, number> = {
         ...round.playerRoundScores,
-        [event.playerId]: (round.playerRoundScores[event.playerId] ?? 0) + event.points,
+        [event.playerId]: newPlayerScore,
       };
 
       const updatedRound: RoundState = {
@@ -234,6 +232,11 @@ export function transition(state: MatchState, event: MatchEvent): TransitionResu
         currentRound: updatedRound,
       };
 
+      // 59-point gap win condition — Duel mode only
+      if (state.gameMode === "duel" && newPlayerScore - opponentScore >= ROUND_WIN_GAP) {
+        return endRound(newState, event.playerId);
+      }
+
       return {
         state: newState,
         effects: [{ type: "broadcastState" }, { type: "startTimer" }],
@@ -241,46 +244,12 @@ export function transition(state: MatchState, event: MatchEvent): TransitionResu
     }
 
     case "invalidWord": {
+      // Fault penalty (-2s alarm) is handled by GameRoom directly.
+      // Faults no longer end rounds — just broadcast updated state.
       if (state.status !== "round_active" || !state.currentRound) {
         return { state, effects: [] };
       }
-
-      const round = state.currentRound;
-      const currentFaults = round.faults[event.playerId] ?? 0;
-      const newFaultCount = currentFaults + 1;
-
-      const updatedFaults: Record<PlayerId, number> = {
-        ...round.faults,
-        [event.playerId]: newFaultCount,
-      };
-
-      const faultsToLose = getModeConfig(state.gameMode).faultsToLoseRound;
-      if (newFaultCount >= faultsToLose) {
-        const winnerId = otherPlayer(state, event.playerId);
-        const stateWithFault: MatchState = {
-          ...state,
-          currentRound: {
-            ...round,
-            faults: updatedFaults,
-          },
-        };
-        return endRound(stateWithFault, winnerId);
-      }
-
-      const updatedRound: RoundState = {
-        ...round,
-        faults: updatedFaults,
-      };
-
-      const newState: MatchState = {
-        ...state,
-        currentRound: updatedRound,
-      };
-
-      return {
-        state: newState,
-        effects: [{ type: "broadcastState" }],
-      };
+      return { state, effects: [{ type: "broadcastState" }] };
     }
 
     case "turnTimeout": {
@@ -288,8 +257,7 @@ export function transition(state: MatchState, event: MatchEvent): TransitionResu
         return { state, effects: [] };
       }
 
-      // If Second Life was consumed by the caller, the round continues —
-      // restart the timer for the same player. Do not increment faults.
+      // If Second Life was consumed by the caller, the round continues.
       if (event.secondLifeConsumed) {
         return {
           state,
@@ -324,7 +292,6 @@ export function transition(state: MatchState, event: MatchEvent): TransitionResu
         };
       }
 
-      // Both confirmed — start the next round.
       const nextRoundNumber = ctx.roundNumber + 1;
       const nextRound = freshRound(
         nextRoundNumber,
@@ -387,31 +354,6 @@ export function transition(state: MatchState, event: MatchEvent): TransitionResu
       return {
         state: newState,
         effects: [{ type: "broadcastState" }],
-      };
-    }
-
-    case "blockApplied": {
-      // Block: remove the opponent's last word from the chain.
-      // Power-up inventory decrement happens in GameRoom via PowerUpEngine.
-      if (state.status !== "round_active" || !state.currentRound) {
-        return { state, effects: [] };
-      }
-      const round = state.currentRound;
-      if (round.chain.length === 0) {
-        return { state, effects: [] };
-      }
-      const newChain = round.chain.slice(0, -1);
-      // After Block, the player whose word was blocked plays again with their
-      // remaining time. currentPlayerId stays as the opponent of the blocker.
-      const blockedPlayerId = otherPlayer(state, event.byPlayerId);
-      const updatedRound: RoundState = {
-        ...round,
-        chain: newChain,
-        currentPlayerId: blockedPlayerId,
-      };
-      return {
-        state: { ...state, currentRound: updatedRound },
-        effects: [{ type: "broadcastState" }, { type: "stopTimer" }, { type: "startTimer" }],
       };
     }
 

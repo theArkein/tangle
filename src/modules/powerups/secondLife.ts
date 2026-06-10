@@ -5,5 +5,5 @@ export const SECOND_LIFE: PowerUpDefinition = {
   name: "Second Life",
   category: "defensive",
   rarity: "common",
-  description: "Survive one timeout this round without losing.",
+  description: "Resets your turn timer to 25s (10s in Danger Zone). Auto-activates on timeout.",
 };

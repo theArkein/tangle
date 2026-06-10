@@ -5,7 +5,7 @@ export const FREEZE: PowerUpDefinition = {
   name: "Freeze",
   category: "defensive",
   rarity: "common",
-  description: "Pause your opponent's timer for 5 seconds.",
+  description: "Add 5 seconds to your own turn timer.",
 };
 
-export const FREEZE_DURATION_MS = 5_000;
+export const FREEZE_EXTENSION_MS = 5_000;
