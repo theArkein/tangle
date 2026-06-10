@@ -121,20 +121,27 @@ const POWER_DESC = Object.fromEntries(
 ) as Record<PowerUpId, { own: string; opp: string }>
 
 function PowerUpTooltip({ id, description, children }: { id: PowerUpId; description: string; children: React.ReactNode }) {
-  const [visible, setVisible] = useState(false)
+  const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null)
+  const ref = useRef<HTMLSpanElement>(null)
   return (
     <span
+      ref={ref}
       style={{ position: 'relative', display: 'inline-flex' }}
-      onMouseEnter={() => setVisible(true)}
-      onMouseLeave={() => setVisible(false)}
+      onMouseEnter={() => {
+        if (ref.current) {
+          const r = ref.current.getBoundingClientRect()
+          setAnchor({ x: r.left + r.width / 2, y: r.top })
+        }
+      }}
+      onMouseLeave={() => setAnchor(null)}
     >
       {children}
-      {visible && (
+      {anchor && (
         <span style={{
-          position: 'absolute',
-          bottom: 'calc(100% + 7px)',
-          left: '50%',
-          transform: 'translateX(-50%)',
+          position: 'fixed',
+          top: anchor.y - 7,
+          left: anchor.x,
+          transform: 'translate(-50%, -100%)',
           background: 'var(--n900)',
           color: 'var(--n0)',
           padding: '6px 9px',
@@ -144,7 +151,7 @@ function PowerUpTooltip({ id, description, children }: { id: PowerUpId; descript
           width: 170,
           textAlign: 'center',
           pointerEvents: 'none',
-          zIndex: 200,
+          zIndex: 9999,
           boxShadow: '0 3px 10px rgba(0,0,0,0.30)',
         } as React.CSSProperties}>
           <strong style={{ display: 'block', fontSize: 11, marginBottom: 3 }}>{POWER_UP_LABELS[id].name}</strong>
