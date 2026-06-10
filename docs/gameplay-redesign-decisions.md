@@ -120,7 +120,7 @@ Each trigger always earns one specific power-up. Players can strategise around e
 | Word contains letters from 2+ rare tiers | 💚 Second Life | Any time (e.g. "quickly" = Q Tier 1 + K Tier 2) |
 
 > **Second Life** has 3 earning paths — any one triggers it.
-> **Activation:** manually triggered by the player before their timer runs out (not auto-activating on timeout). Resets the turn timer. ⚠️ Timer reset amount TBD — full reset vs fixed seconds.
+> **Activation:** auto-activates when timer hits 0 (saves the round), OR player can manually activate at any point during their turn. Either way → full timer reset to **25 seconds**.
 
 ---
 
@@ -153,9 +153,9 @@ Each trigger always earns one specific power-up. Players can strategise around e
 - Broadcast score update to both players immediately
 
 ### Second Life
-- Manually activated by player on their turn before timer runs out
-- On activation: resets turn timer (amount TBD — full reset vs fixed seconds)
-- NOT auto-activating on timeout
+- Auto-activates when timer hits 0 (saves the round, player doesn't lose)
+- Can also be manually activated at any point during player's turn
+- On activation: full timer reset to 25 seconds
 
 ### Second Life Trigger Evaluation (per word submission)
 Check all 3 paths after each valid word:
