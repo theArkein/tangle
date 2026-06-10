@@ -47,7 +47,7 @@ import {
 
 const REMATCH_TIMEOUT_MS = 30_000;
 const NEXT_ROUND_TIMEOUT_MS = 30_000;
-const DANGER_ZONE_TIMER_MS = 5_000;
+const DANGER_ZONE_TIMER_MS = 10_000;
 const SEED_LETTERS = "abcdefghijklmnoprstw";
 
 type AlarmKind = "turn" | "rematch" | "next_round" | "bot_turn";
@@ -327,6 +327,19 @@ export class GameRoom implements DurableObject {
 
       await this.saveRoom(stored);
       await this.applyEffects(result.effects, stored);
+
+      // Deduct 2 seconds from the remaining turn time for an invalid word,
+      // but only if the round is still active (fault didn't just end the round).
+      if (stored.matchState?.status === "round_active" && stored.turnStartAt !== undefined) {
+        const currentAlarm = await this.state.storage.getAlarm();
+        if (currentAlarm !== null) {
+          const newAlarm = Math.max(Date.now() + 1_000, currentAlarm - 2_000);
+          await this.state.storage.setAlarm(newAlarm);
+          stored.turnStartAt -= 2_000;
+          await this.saveRoom(stored);
+          this.broadcastStateAll(stored);
+        }
+      }
       return;
     }
 
@@ -1117,6 +1130,8 @@ export class GameRoom implements DurableObject {
           state,
           scores: stored.scores,
           roundHistory: stored.roundHistory,
+          turnStartAt: stored.turnStartAt,
+          serverNow: Date.now(),
         })
       );
     } catch {

@@ -20,7 +20,7 @@ export const TRIGGER_CATEGORY: Record<DropSource, Category> = {
 export const CHAIN_LENGTH_THRESHOLD = 10;
 
 // Chain length at which the Danger Zone begins.
-export const DANGER_ZONE_CHAIN_THRESHOLD = 20;
+export const DANGER_ZONE_CHAIN_THRESHOLD = 12;
 
 // Score multiplier applied to all words in the Danger Zone.
 export const DANGER_ZONE_MULTIPLIER = 3;

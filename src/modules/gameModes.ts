@@ -12,7 +12,7 @@ export interface GameModeConfig {
 const CLASSIC: GameModeConfig = {
   mode: "classic",
   displayName: "Classic Duel",
-  turnTimeoutMs: 60_000,
+  turnTimeoutMs: 20_000,
   faultsToLoseRound: 8,
   roundsToWinMatch: 3,
   powerUpsEnabled: true,

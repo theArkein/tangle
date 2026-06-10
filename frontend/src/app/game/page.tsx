@@ -84,7 +84,7 @@ interface RoundHistoryEntry {
 }
 
 type ServerMsg =
-  | { type: 'state_update'; state: MatchState; scores: Record<string, number>; roundHistory: RoundHistoryEntry[] }
+  | { type: 'state_update'; state: MatchState; scores: Record<string, number>; roundHistory: RoundHistoryEntry[]; turnStartAt?: number; serverNow?: number }
   | { type: 'waiting'; playerCount: number; mode?: GameMode }
   | { type: 'word_result'; valid: true; points: number; breakdown: { base: number; rareLetter: number; longWord: number }; multiplier?: number }
   | { type: 'word_result'; valid: false; reason: string }
@@ -106,7 +106,7 @@ type ServerMsg =
 const NEXT_ROUND_SECONDS = 30
 
 const MODE_CONFIG: Record<GameMode, { displayName: string; turnSeconds: number; maxFaults: number }> = {
-  classic: { displayName: 'Classic Duel', turnSeconds: 60, maxFaults: 8 },
+  classic: { displayName: 'Classic Duel', turnSeconds: 20, maxFaults: 8 },
   speed_round: { displayName: 'Speed Round', turnSeconds: 8, maxFaults: 1 },
 }
 
@@ -238,6 +238,7 @@ function GameContent() {
   const turnStartAtRef = useRef(0)
   const nextRoundStartedAtRef = useRef(0)
   const reactionIdRef = useRef(0)
+  const inDangerZoneRef = useRef(false)
 
 
   // Load current player ID
@@ -409,7 +410,13 @@ function GameContent() {
           const chainGrew = newRound.chain.length > (prevRound?.chain.length ?? -1)
           const roundChanged = newRound.roundNumber !== prevRound?.roundNumber
           const firstUpdate = !prevRound
-          if (chainGrew || roundChanged || firstUpdate) {
+          // Use server-authoritative turnStartAt when available so the timer
+          // survives a page refresh without resetting to full. The serverNow
+          // field lets us compensate for clock skew between server and client.
+          if (msg.turnStartAt != null && msg.serverNow != null) {
+            const serverElapsed = msg.serverNow - msg.turnStartAt
+            turnStartAtRef.current = Date.now() - serverElapsed
+          } else if (chainGrew || roundChanged || firstUpdate) {
             turnStartAtRef.current = Date.now()
           }
           if (chainGrew && prevRound && prevRound.currentPlayerId !== myId) {
@@ -488,16 +495,17 @@ function GameContent() {
     prevStatusRef.current = s
   }, [matchState?.status, matchState?.matchWinnerId, myId])
 
-  // Sound: time warn at 3s
+  // Sound: time warn — 3s in Danger Zone (short timer), 5s in normal play (20s timer)
   const timeWarnFiredRef = useRef(false)
   useEffect(() => {
     if (matchState?.status !== 'round_active') { timeWarnFiredRef.current = false; return }
-    if (timeLeft <= 3 && !timeWarnFiredRef.current) {
+    const warnAt = inDangerZoneRef.current ? 3 : 5
+    if (timeLeft <= warnAt && !timeWarnFiredRef.current) {
       timeWarnFiredRef.current = true
       playRef.current('time_warn')
       setActiveToast({ id: ++toastIdRef.current, variant: 'time_warn' })
     }
-    if (timeLeft > 3) timeWarnFiredRef.current = false
+    if (timeLeft > warnAt) timeWarnFiredRef.current = false
   }, [timeLeft, matchState?.status])
 
   const submitWord = useCallback(() => {
@@ -847,7 +855,8 @@ function GameContent() {
   const opponentInventory: PowerUpInventory = round.powerUpInventory[opponentId] ?? emptyInv
   const blindOnMe = round.activeEffects.find(e => e.kind === 'blind' && e.onPlayerId === myId)
   const swapPending = round.activeEffects.find(e => e.kind === 'swapPending' && e.byPlayerId === myId)
-  const inDangerZone = round.chain.length >= 20
+  const inDangerZone = round.chain.length >= 12
+  inDangerZoneRef.current = inDangerZone
   const timerPct = (timeLeft / modeCfg.turnSeconds) * 100
   const timerUrgent = timeLeft <= 5 || inDangerZone
   const lastWord = round.chain[round.chain.length - 1]
@@ -908,7 +917,7 @@ function GameContent() {
       {/* Danger Zone strip */}
       {inDangerZone && (
         <div style={{ background: 'var(--danger-zone-bg)', borderBottom: '1px solid var(--danger-zone)', padding: '6px 14px', fontSize: '11px', color: 'var(--danger-zone)', textAlign: 'center', flexShrink: 0, fontWeight: 700, letterSpacing: '0.04em' }}>
-          DANGER ZONE — 3× scoring · 5s timer
+          DANGER ZONE — 3× scoring · 10s timer
         </div>
       )}
 
@@ -1110,22 +1119,15 @@ function GameContent() {
         )}
 
         {/* Score / word floats */}
-        {floats.filter(f => f.byMe).length > 0 && (
-          <div style={{ position: 'absolute', bottom: 8, left: 14, display: 'flex', flexDirection: 'column-reverse', gap: 4, pointerEvents: 'none' }}>
-            {floats.filter(f => f.byMe).map(f => (
-              <div key={f.id} style={{ fontSize: 15, fontWeight: 700, fontFamily: f.ok ? 'var(--font-mono)' : 'var(--font-body)', color: f.ok ? 'var(--p1)' : 'var(--danger)', animation: 'scoreFloat 2s ease-out forwards', whiteSpace: 'nowrap' }}>
-                {f.text}
-              </div>
-            ))}
-          </div>
-        )}
-        {floats.filter(f => !f.byMe).length > 0 && (
-          <div style={{ position: 'absolute', bottom: 8, right: 14, display: 'flex', flexDirection: 'column-reverse', gap: 4, alignItems: 'flex-end', pointerEvents: 'none' }}>
-            {floats.filter(f => !f.byMe).map(f => (
-              <div key={f.id} style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--p2)', animation: 'scoreFloat 2s ease-out forwards' }}>
-                {f.text}
-              </div>
-            ))}
+        {floats.length > 0 && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              {floats.map(f => (
+                <div key={f.id} style={{ fontSize: 36, fontWeight: 800, fontFamily: f.ok ? 'var(--font-mono)' : 'var(--font-body)', color: f.ok ? (f.byMe ? 'var(--p1)' : 'var(--p2)') : 'var(--danger)', animation: 'scoreFloat 2s ease-out forwards', whiteSpace: 'nowrap', textShadow: '0 2px 8px rgba(0,0,0,0.18)' }}>
+                  {f.text}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
