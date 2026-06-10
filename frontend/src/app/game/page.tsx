@@ -191,7 +191,7 @@ function GameContent() {
   const [submitting, setSubmitting] = useState(false)
   const [floats, setFloats] = useState<Array<{ id: number; text: string; ok: boolean; byMe: boolean }>>([])
   const floatIdRef = useRef(0)
-  const [timeLeft, setTimeLeft] = useState(60)
+  const [timeLeft, setTimeLeft] = useState(0)
   const [nextRoundTimeLeft, setNextRoundTimeLeft] = useState(NEXT_ROUND_SECONDS)
   const [roundHistory, setRoundHistory] = useState<RoundHistoryEntry[]>([])
   const [gameScores, setGameScores] = useState<Record<string, number>>({})

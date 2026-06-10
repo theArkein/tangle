@@ -1017,8 +1017,8 @@ export class GameRoom implements DurableObject {
           // Bot turn: skip the full turn timer, schedule a short bot-move delay instead.
           if (stored.botPlayerId && round?.currentPlayerId === stored.botPlayerId) {
             const delay = 2500 + Math.floor(Math.random() * 2000);
+            stored.turnStartAt = Date.now(); // set before setAlarm so it is persisted
             await this.setAlarm(stored, "bot_turn", Date.now() + delay);
-            stored.turnStartAt = Date.now();
             break;
           }
           const inDangerZone =
@@ -1041,8 +1041,8 @@ export class GameRoom implements DurableObject {
               round.activeEffects = rush.activeEffects;
             }
           }
+          stored.turnStartAt = Date.now(); // set before setAlarm so it is persisted
           await this.setAlarm(stored, "turn", Date.now() + timeoutMs);
-          stored.turnStartAt = Date.now();
           break;
         }
         case "stopTimer":

@@ -6,9 +6,9 @@ import {
 } from "../../src/modules/gameModes";
 
 describe("gameModes", () => {
-  it("returns classic config with 60s turns, 8 faults, best-of-5, power-ups on", () => {
+  it("returns classic config with 20s turns, 8 faults, best-of-5, power-ups on", () => {
     const cfg = getModeConfig("classic");
-    expect(cfg.turnTimeoutMs).toBe(60_000);
+    expect(cfg.turnTimeoutMs).toBe(20_000);
     expect(cfg.faultsToLoseRound).toBe(8);
     expect(cfg.roundsToWinMatch).toBe(3);
     expect(cfg.powerUpsEnabled).toBe(true);
