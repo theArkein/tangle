@@ -7,10 +7,10 @@
 | ❄️ | Freeze | Add 5 seconds to your own turn timer | Your turn |
 | 💚 | Second Life | Auto-survive one timeout without losing the round | Automatic |
 | 💣 | Letter Bomb | Force opponent's next word to contain Q, X, Z, or J | Your turn |
-| ⚡ | Rush | Halve opponent's timer for their next turn | Your turn |
 | 🎯 | Double | Your next 3 words each score 2× points | Your turn |
 | 🃏 | Wild | Your next word can start with any letter (ignores chain rule) | Your turn |
 | ⚓ | Anchor | Opponent's next word must be 6+ letters | Your turn |
+| 💸 | Tax | Reduce opponent's current round score by 10 points | Your turn |
 
 ### Removed from Original 12
 
@@ -24,6 +24,7 @@
 | Peek 👁️ | Low impact, not exciting |
 | Blitz ⚔️ | Breaks turn rhythm, confusing |
 | Shrink 🤏 | Replaced by Wild |
+| Rush ⚡ | Replaced by Tax — timer manipulation was opaque/indeterministic for opponent |
 
 ### Reworked
 
@@ -40,8 +41,10 @@
 
 **⚓ Anchor** — Opponent's next word must be 6+ letters. Opposite pressure to Letter Bomb.
 
+**💸 Tax** — Reduces opponent's current round score by 10 points instantly. Replaces Rush.
+
 ### Deferred / Revisit Later
-Shield, Skip, Gamble, Lenient, Seal, Tax, Boost, Loop, Spin
+Shield, Skip, Gamble, Lenient, Seal, Boost, Loop, Spin
 
 ---
 
@@ -94,13 +97,30 @@ Shield, Skip, Gamble, Lenient, Seal, Tax, Boost, Loop, Spin
 | Decision | Value |
 |---|---|
 | Triggers at | Chain reaches **16 words** |
-| Effect | Turn timer drops, scoring becomes **2×** |
+| Timer | **10 seconds** per turn |
+| Scoring | **2×** everything |
 | Power-up drop on entry | **None** — 2× scoring is the reward itself |
 
 ---
 
-## Power-Up Earning Triggers
-*(To be discussed)*
+## Power-Up Earning Triggers (Deterministic)
+
+Each trigger always earns one specific power-up. Players can strategise around earning them.
+
+| Trigger | Earns | Notes |
+|---|---|---|
+| Reach 25 round points | ❄️ Freeze | Once per 25pt threshold (25, 50, 75...) |
+| Play a 10+ letter word | 🎯 Double | Any time |
+| Word contains Q, X, Z or J | 💣 Letter Bomb | Any time |
+| Play an 8+ letter word | ⚓ Anchor | Any time |
+| Play any word in Danger Zone | 💸 Tax | Any time in DZ |
+| Every 6 words you play | 🃏 Wild | Resets per player (6, 12, 18...) — 6 = letters in TANGLE |
+| Every 8 words you play | 💚 Second Life | One path |
+| Single word scores 15+ points | 💚 Second Life | Another path |
+| Word uses 4+ different vowels | 💚 Second Life | Another path (e.g. sequoia, education) |
+| Word contains letters from 2+ rare tiers | 💚 Second Life | Another path (e.g. "quickly" = Q Tier 1 + K Tier 2) |
+
+> **Second Life** has 4 earning paths — any one of them triggers it.
 
 ---
 
@@ -114,7 +134,7 @@ Shield, Skip, Gamble, Lenient, Seal, Tax, Boost, Loop, Spin
 ### Double
 - ActiveEffect: `{ kind: "doubleScore"; forPlayerId: PlayerId; wordsRemaining: number }`
 - Consumed after 3 words (decrement wordsRemaining on each submission)
-- 2× multiplier applied only when no Danger Zone active
+- 2× multiplier not applied during Danger Zone (DZ takes precedence)
 
 ### Wild
 - ActiveEffect: `{ kind: "wildPending"; forPlayerId: PlayerId }`
@@ -127,14 +147,32 @@ Shield, Skip, Gamble, Lenient, Seal, Tax, Boost, Loop, Spin
 - Consumed on opponent's next word submission
 - Validation rejects words shorter than minLength
 
+### Tax
+- Instant effect, no persistent ActiveEffect
+- Deduct 10 from opponent's current round score (floor at 0, cannot go negative)
+- Broadcast score update to both players immediately
+
+### Second Life Trigger Evaluation (per word submission)
+Check all 4 paths after each valid word:
+1. `playerWordCount % 8 === 0`
+2. `scoreResult.points >= 15`
+3. `countUniqueVowels(word) >= 4`
+4. `hasLettersFromMultipleRareTiers(word, 2)`
+
+If any condition is true → award Second Life to that player.
+
+### Wild Trigger Evaluation
+- Track `playerWordCount` per player per round
+- Award Wild when `playerWordCount % 6 === 0`
+
 ### Danger Zone
 - Chain threshold: 16 words (was 12)
 - Multiplier: 2× (was 3×)
-- No power-up drop on entry (was chaos pool drop)
-- Timer: **10 seconds** (unchanged)
+- No power-up drop on entry
+- Timer: 10 seconds per turn
 
 ### Round Win
-- Check after every word submission: if playerRoundScore >= 100, round ends, player wins
+- Check after every word submission: if `playerRoundScore >= 100`, round ends, player wins
 - Replace fault-based round end logic
 
 ---
@@ -142,11 +180,13 @@ Shield, Skip, Gamble, Lenient, Seal, Tax, Boost, Loop, Spin
 ## Files to Change
 
 1. `src/modules/powerups/types.ts` — update PowerUpId, ActiveEffect union, emptyInventory
-2. `src/modules/powerups/` — delete 8 old files, create `double.ts`, `wild.ts`, `anchor.ts`, update `freeze.ts`
+2. `src/modules/powerups/` — delete old files (freeze, peek, swap, steal, blitz, rush), create `double.ts`, `wild.ts`, `anchor.ts`, `tax.ts`, update `freeze.ts`
 3. `src/modules/powerups/index.ts` — update registry and re-exports
-4. `src/modules/PowerUpEngine.ts` — remove old cases/helpers, add new activation logic
-5. `src/durable-objects/GameRoom.ts` — remove old handlers, wire up new mechanics (round win at 100, fault penalty −2s, DZ at 16 words)
+4. `src/modules/PowerUpEngine.ts` — remove old cases/helpers, add new activation + trigger evaluation logic
+5. `src/durable-objects/GameRoom.ts` — remove old handlers, wire up new mechanics
 6. `src/modules/MatchStateMachine.ts` — update round end condition (score-based), remove fault limit logic
-7. `src/modules/powerups/pools.ts` — update DZ threshold to 16, multiplier to 2×
-8. `frontend/src/lib/powerups.ts` — update PowerUpId type, POWER_UP_LABELS, POWER_UP_GUIDE
-9. `frontend/src/app/game/page.tsx` — update emptyInv, effect chips, remove Swap UI, update DZ threshold
+7. `src/modules/powerups/pools.ts` — update DZ threshold to 16, multiplier to 2×, remove pool-based drops
+8. `src/modules/ScoringEngine.ts` — add rare letter tier support (3 tiers), update multiplier logic
+9. `src/modules/gameModes.ts` — update Duel (25s), Classic (12s), rename modes
+10. `frontend/src/lib/powerups.ts` — update PowerUpId type, POWER_UP_LABELS, POWER_UP_GUIDE
+11. `frontend/src/app/game/page.tsx` — update emptyInv, effect chips, remove Swap UI, update DZ threshold display
