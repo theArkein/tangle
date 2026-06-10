@@ -3,54 +3,37 @@
 // The worker holds the canonical power-up registry in src/modules/powerups/.
 // Display-only metadata (emoji, "How it works" paragraph, example scenarios)
 // lives here so the guide and the in-game HUD stay in sync.
-//
-// The mechanical-correctness contract (id, name, description must match the
-// worker registry verbatim) is enforced by tests/unit/PowerUpGuideContent.test.ts.
 
 export type PowerUpId =
   | 'freeze'
   | 'secondLife'
   | 'letterBomb'
-  | 'block'
-  | 'swap'
-  | 'blind'
-  | 'shrink'
-  | 'rush'
-  | 'steal'
-  | 'peek'
-  | 'blitz'
-  | 'wildfire'
+  | 'double'
+  | 'wild'
+  | 'anchor'
+  | 'tax'
 
-export type PowerUpCategory = 'defensive' | 'offensive' | 'disruption' | 'chaos'
-export type PowerUpRarity = 'common' | 'uncommon' | 'rare'
+export type PowerUpCategory = 'defensive' | 'offensive' | 'disruption'
 
 export const POWER_UP_LABELS: Record<PowerUpId, { name: string; emoji: string }> = {
   freeze: { name: 'Freeze', emoji: '❄️' },
   secondLife: { name: '2nd Life', emoji: '💚' },
   letterBomb: { name: 'Letter Bomb', emoji: '💣' },
-  block: { name: 'Block', emoji: '🛑' },
-  swap: { name: 'Swap', emoji: '🔀' },
-  blind: { name: 'Blind', emoji: '🙈' },
-  shrink: { name: 'Shrink', emoji: '🤏' },
-  rush: { name: 'Rush', emoji: '⚡' },
-  steal: { name: 'Steal', emoji: '🪝' },
-  peek: { name: 'Peek', emoji: '👁' },
-  blitz: { name: 'Blitz', emoji: '⚔️' },
-  wildfire: { name: 'Wildfire', emoji: '🔥' },
+  double: { name: 'Double', emoji: '🎯' },
+  wild: { name: 'Wild', emoji: '🃏' },
+  anchor: { name: 'Anchor', emoji: '⚓' },
+  tax: { name: 'Tax', emoji: '💸' },
 }
 
 export interface PowerUpGuideEntry {
   id: PowerUpId
-  // name + description match the worker registry verbatim (test-enforced).
   name: string
   description: string
   category: PowerUpCategory
-  rarity: PowerUpRarity
   // Guide-only longer-form copy.
   howItWorks: string
   example: string
   // Shown in the toast when the OPPONENT earns this power-up.
-  // Frames the effect from the local player's point of view.
   opponentDescription: string
 }
 
@@ -58,202 +41,109 @@ export const POWER_UP_GUIDE: PowerUpGuideEntry[] = [
   {
     id: 'freeze',
     name: 'Freeze',
-    description: "Pause your opponent's timer for 5 seconds.",
-    opponentDescription: 'They can pause your timer for 5 seconds.',
+    description: 'Add 5 seconds to your own turn timer.',
+    opponentDescription: 'They gained 5 extra seconds on their timer.',
     category: 'defensive',
-    rarity: 'common',
     howItWorks:
-      "Activate on your turn or theirs. The opponent's countdown halts for 5 seconds — buying you breathing room or stealing theirs.",
-    example: 'Opponent has 2 seconds left and is typing. Freeze them; their clock holds at 2s while they scramble.',
+      'Instantly extends your current turn timer by 5 seconds. Use it when you need a little more time to find the right word.',
+    example: "You have 3 seconds left and almost have a word. Freeze — your timer extends to 8 seconds.",
   },
   {
     id: 'secondLife',
     name: 'Second Life',
-    description: 'Survive one timeout this round without losing.',
-    opponentDescription: 'They can survive one timeout this round without losing.',
+    description: 'Resets your turn timer to 25s (10s in Danger Zone). Auto-activates on timeout.',
+    opponentDescription: 'They have a Second Life that will save them from one timeout.',
     category: 'defensive',
-    rarity: 'common',
     howItWorks:
-      'Auto-activates the first time you would time out. Instead of losing the round, the timer resets and play continues. One use per round.',
-    example: "You're stumped and the timer hits zero. Second Life kicks in, you get a fresh timer to find the word.",
-  },
-  {
-    id: 'peek',
-    name: 'Peek',
-    description: 'See what your opponent is currently typing for one turn.',
-    opponentDescription: 'They can watch what you type for one turn.',
-    category: 'defensive',
-    rarity: 'uncommon',
-    howItWorks:
-      "Activate before your opponent plays. For their next turn you see their input field update in real time as they type.",
-    example: "You suspect your opponent will play a long word. Peek; you see them typing 'philosophy' and prepare your reply.",
+      'Auto-activates if your timer hits zero — you keep playing instead of losing the round. Can also be manually activated anytime to get a fresh 25-second timer.',
+    example: "Your timer hits zero. Second Life kicks in automatically — you get a full 25-second reset.",
   },
   {
     id: 'letterBomb',
     name: 'Letter Bomb',
     description: "Force opponent's next word to contain Q, X, Z, or J.",
-    opponentDescription: 'Your next word may need to contain Q, X, Z, or J.',
+    opponentDescription: 'Your next word must contain Q, X, Z, or J.',
     category: 'offensive',
-    rarity: 'common',
     howItWorks:
-      'Activate to drop a required letter on your opponent. One of Q/X/Z/J is randomly chosen — their next word must contain it in addition to following the chain rule.',
-    example: "Chain ends in 'on'. Letter Bomb adds an X requirement; opponent must find a word starting with 'n' that contains X.",
+      'A random hard letter (Q, X, Z, or J) is dropped on the opponent. Their next word must contain it, on top of the usual chain rule.',
+    example: "Chain ends in 'on'. Letter Bomb picks X — opponent must play a word starting with 'n' that contains X.",
   },
   {
-    id: 'block',
-    name: 'Block',
-    description: "Reject opponent's last word. They must replay with a different word, time preserved.",
-    opponentDescription: 'They can reject your last word — you would replay it.',
+    id: 'double',
+    name: 'Double',
+    description: 'Your next 3 words each score 2×. Does not stack with Danger Zone.',
+    opponentDescription: 'Their next 3 words will score double points.',
     category: 'offensive',
-    rarity: 'common',
     howItWorks:
-      "Activate during the opponent's turn after they have submitted. The chain rolls back, opponent picks a different word, their remaining time carries over.",
-    example: "Opponent plays 'apple'. You Block it. They must find a different word from the same prompt.",
+      'Activate on your turn. For each of your next 3 word submissions, the score is doubled. Does not stack with Danger Zone (DZ multiplier takes precedence).',
+    example: 'You play "junction" (9 pts). With Double active, it scores 18 pts. Two more double words to go.',
   },
   {
-    id: 'shrink',
-    name: 'Shrink',
-    description: "Opponent's next word must be 4 letters or fewer.",
-    opponentDescription: 'They can cap your next word to 4 letters or fewer.',
-    category: 'offensive',
-    rarity: 'uncommon',
-    howItWorks:
-      "Activate before opponent's turn. Their next word is capped at 4 letters — limits their points and forces compact words.",
-    example: "Chain ends in 'an'. Shrink applied; opponent must find a 1-4 letter word starting with 'n'.",
-  },
-  {
-    id: 'swap',
-    name: 'Swap',
-    description: 'Change the next required letter to one of your choice. Consumes your turn.',
-    opponentDescription: 'They can swap the chain seed letter to anything they choose.',
-    category: 'offensive',
-    rarity: 'uncommon',
-    howItWorks:
-      "On your turn, activate and pick any letter a–z. The chain hint changes to that letter, but you forfeit your own play this turn. Opponent now starts from the new letter.",
-    example: "Chain ends in 'qz'. You Swap to 'a'; opponent now plays a word starting with 'a' instead.",
-  },
-  {
-    id: 'rush',
-    name: 'Rush',
-    description: "Cut opponent's timer in half for their next turn.",
-    opponentDescription: 'They can halve your timer for your next turn.',
-    category: 'offensive',
-    rarity: 'uncommon',
-    howItWorks:
-      'Activate before opponent plays. Their next turn timer is halved (30s instead of 60s in Classic).',
-    example: 'You activate Rush at the start of opponent\'s turn. They scramble with only 30 seconds.',
-  },
-  {
-    id: 'blind',
-    name: 'Blind',
-    description: 'Hide the chain from your opponent for 2 turns.',
-    opponentDescription: 'They can hide the chain history from you for 2 turns.',
+    id: 'wild',
+    name: 'Wild',
+    description: "Your next word can start with any letter, ignoring the chain rule.",
+    opponentDescription: 'They can play any word on their next turn, ignoring the chain rule.',
     category: 'disruption',
-    rarity: 'uncommon',
     howItWorks:
-      "For the opponent's next 2 turns, the chain history is hidden behind dots. They only see the seed letter hint, not what's been played.",
-    example: "Opponent can't see what was played, so they must guess the chain ending from the seed letter alone.",
+      "Activate on your turn. Your next word submission ignores the 'must start with X' chain rule. After that word, the chain continues from its last letter as normal.",
+    example: "Chain requires 'qz'. Wild — you play 'magnet' instead, chain now requires 't'.",
   },
   {
-    id: 'steal',
-    name: 'Steal',
-    description: "Take opponent's last word and add its points to your score.",
-    opponentDescription: 'They can take your last word and its points.',
-    category: 'disruption',
-    rarity: 'rare',
+    id: 'anchor',
+    name: 'Anchor',
+    description: "Opponent's next word must be 6 or more letters.",
+    opponentDescription: 'Your next word must be 6 or more letters.',
+    category: 'offensive',
     howItWorks:
-      "Activate on your turn. Opponent's last word is removed from their score and credited to yours. The chain rolls back so you play from the previous word.",
-    example: 'Opponent just scored 13 points on "elephant". Steal — you gain 13, they lose 13, chain now ends in the word before "elephant".',
+      "Activate on your turn. Opponent's next word submission must be at least 6 letters long. Short words will be rejected until they find a qualifying word.",
+    example: "Chain ends in 'an'. Anchor applied — opponent must find a word starting with 'n' with 6+ letters.",
   },
   {
-    id: 'blitz',
-    name: 'Blitz',
-    description: "Play two words in a row, skipping opponent's turn.",
-    opponentDescription: 'They can play two words back-to-back, skipping your turn.',
-    category: 'disruption',
-    rarity: 'rare',
+    id: 'tax',
+    name: 'Tax',
+    description: 'Reduce opponent\'s current round score by 10 points (minimum 0).',
+    opponentDescription: "They can cut 10 points from your current round score.",
+    category: 'offensive',
     howItWorks:
-      "After playing a word this turn, activate Blitz; the turn does not pass. You play another word starting from the chain rule, then play returns to opponent.",
-    example: 'You play "elephant" (13 pts). Blitz — instead of opponent\'s turn, you also play "tangent" (10 pts).',
-  },
-  {
-    id: 'wildfire',
-    name: 'Wildfire',
-    description: 'All words score 3× for both players for the next 3 turns.',
-    opponentDescription: 'All words score 3× for both players for the next 3 turns.',
-    category: 'chaos',
-    rarity: 'rare',
-    howItWorks:
-      "For the next 3 turns (yours and theirs combined), every word's points are tripled. Affects both sides — high-risk, high-reward.",
-    example: 'A 5-point word becomes 15. Long words and rare-letter plays during Wildfire can swing a round.',
+      "Instant effect. Deducts 10 points from the opponent's current round score, floored at 0. Changes the score gap immediately.",
+    example: "Opponent has 47 round points. Tax — they drop to 37. You're now 10 points closer to the 59-point win gap.",
   },
 ]
-
-// Drop trigger configuration. Values match the worker side
-// (src/modules/powerups/pools.ts and src/modules/PowerUpEngine.ts).
-export const DROP_TRIGGERS = [
-  {
-    id: 'score_threshold' as const,
-    emoji: '📈',
-    title: 'Score threshold',
-    detail: 'Every 15 points of round score crosses a threshold.',
-    pool: 'Defensive' as const,
-    cap: 'Unlimited (a single big word can pop multiple).',
-  },
-  {
-    id: 'rare_letter' as const,
-    emoji: '🔤',
-    title: 'Rare-letter word',
-    detail: 'First word containing Q, X, Z, or J.',
-    pool: 'Offensive' as const,
-    cap: 'Once per player per round.',
-  },
-  {
-    id: 'long_word' as const,
-    emoji: '📏',
-    title: 'Long word',
-    detail: 'First word with 8 or more letters.',
-    pool: 'Offensive' as const,
-    cap: 'Once per player per round.',
-  },
-  {
-    id: 'chain_length' as const,
-    emoji: '🔗',
-    title: 'Long chain',
-    detail: 'Round chain reaches 10 words.',
-    pool: 'Disruption' as const,
-    cap: 'Once per round (shared).',
-  },
-]
-
-export const RARITY_WEIGHTS = { common: 60, uncommon: 30, rare: 10 } as const
 
 export const CATEGORY_META: Record<PowerUpCategory, { label: string; tagline: string }> = {
   defensive: { label: 'Defensive', tagline: 'Buy time and survive bad turns.' },
   offensive: { label: 'Offensive', tagline: 'Constrain your opponent.' },
   disruption: { label: 'Disruption', tagline: 'Bend the rules around the chain.' },
-  chaos: { label: 'Chaos', tagline: 'Change the game for everyone.' },
 }
 
+// Deterministic earning triggers — each trigger always earns one specific power-up.
+export const EARN_TRIGGERS = [
+  { powerup: 'freeze' as PowerUpId, emoji: '❄️', trigger: 'Every 25 points you score', notes: 'Unlimited' },
+  { powerup: 'double' as PowerUpId, emoji: '🎯', trigger: '10+ letter word', notes: 'Any time' },
+  { powerup: 'letterBomb' as PowerUpId, emoji: '💣', trigger: 'Word contains Q, X, Z, or J', notes: 'Any time' },
+  { powerup: 'anchor' as PowerUpId, emoji: '⚓', trigger: '8+ letter word', notes: 'Any time' },
+  { powerup: 'tax' as PowerUpId, emoji: '💸', trigger: 'Any word in Danger Zone', notes: 'Any time in DZ' },
+  { powerup: 'wild' as PowerUpId, emoji: '🃏', trigger: 'Every 6 words you play', notes: '6, 12, 18...' },
+  { powerup: 'secondLife' as PowerUpId, emoji: '💚', trigger: 'Word scores 15+ pts, uses 4+ distinct vowels, or contains 2+ rare letter tiers', notes: '3 paths + DZ entry' },
+] as const
+
 export const GAME_MODES = {
-  classic: {
-    label: 'Classic Duel',
+  duel: {
+    label: 'Duel',
     emoji: '⚔️',
-    turnTimerSec: 60,
-    faultsToLose: 8,
+    turnTimerSec: 25,
     roundsToWinMatch: 3,
     bestOf: 'Best of 5',
     powerUpsEnabled: true,
-    tagline: 'Tactical. Power-ups in play. Best of 5 rounds.',
+    tagline: 'Tactical. Power-ups in play. Win a round by 59 points.',
   },
-  speed_round: {
-    label: 'Speed Round',
+  classic: {
+    label: 'Classic',
     emoji: '⚡',
     turnTimerSec: 8,
-    faultsToLose: 1,
     roundsToWinMatch: 1,
     bestOf: 'Single round',
     powerUpsEnabled: false,
-    tagline: 'Fast. No power-ups. One round decides it.',
+    tagline: 'Fast. No power-ups. One round — survive the timer.',
   },
 } as const

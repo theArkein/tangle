@@ -10,14 +10,14 @@ import TimerBar from '@/components/ui/TimerBar'
 import GameToast, { type ToastVariant, TOAST_DURATION } from '@/components/ui/GameToast'
 import { POWER_UP_LABELS, type PowerUpId } from '@/lib/powerups'
 
-type GameMode = 'classic' | 'speed_round'
+type GameMode = 'duel' | 'classic'
 type Screen = 'lobby' | 'waiting' | 'game' | 'toasts'
 type HeaderVariant = 'A' | 'B' | 'C'
 type GameSubState = 'my_turn' | 'opp_turn' | 'danger' | 'round_end' | 'match_end'
 
 const MODES = {
-  classic: { label: 'Classic', detail: 'Best of 5 · 15s turns · power-ups' },
-  speed_round: { label: 'Speed', detail: 'Single round · 8s turns · no power-ups' },
+  duel: { label: 'Duel', detail: 'Best of 5 · 25s turns · power-ups' },
+  classic: { label: 'Classic', detail: 'Single round · 8s turns · no power-ups' },
 }
 
 const MOCK_MATCHES = [
@@ -27,8 +27,8 @@ const MOCK_MATCHES = [
 ]
 
 const MOCK_CHAIN = ['tangent', 'entice', 'iceberg', 'ergot', 'gothic', 'icicle', 'clever']
-const MOCK_MY_INV: Partial<Record<PowerUpId, number>> = { freeze: 2, secondLife: 1, blind: 1 }
-const MOCK_OPP_INV: Partial<Record<PowerUpId, number>> = { letterBomb: 1, rush: 2 }
+const MOCK_MY_INV: Partial<Record<PowerUpId, number>> = { freeze: 2, secondLife: 1, wild: 1 }
+const MOCK_OPP_INV: Partial<Record<PowerUpId, number>> = { letterBomb: 1, double: 2 }
 
 // ─── Header variants ──────────────────────────────────────────────────────────
 
@@ -116,7 +116,7 @@ function LobbyScreen({ onPlay, hasMatches, headerVariant }: { onPlay: () => void
 
         <div style={{ marginBottom: 12 }}>
           <div style={{ display: 'flex', background: 'var(--n100)', borderRadius: 'var(--radius-full)', padding: 3, gap: 2 }}>
-            {(['classic', 'speed_round'] as GameMode[]).map(m => {
+            {(['duel', 'classic'] as GameMode[]).map(m => {
               const active = mode === m
               return (
                 <button key={m} onClick={() => setMode(m)} style={{ flex: 1, padding: '8px 12px', borderRadius: 'var(--radius-full)', background: active ? 'var(--n0)' : 'transparent', color: active ? 'var(--n900)' : 'var(--n500)', border: active ? '1px solid var(--n200)' : '1px solid transparent', fontFamily: 'var(--font-heading)', fontSize: 13, fontWeight: active ? 600 : 400, cursor: 'pointer', transition: 'all 0.15s', boxShadow: active ? '0 1px 3px rgba(0,0,0,0.07)' : 'none' }}>

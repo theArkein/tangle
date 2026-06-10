@@ -139,13 +139,13 @@ describe("Matchmaking under concurrency", () => {
     expect(finallyMatched).toBe(2);
   });
 
-  it("keeps Classic and Speed queues isolated — they never cross-match", async () => {
+  it("keeps Duel and Classic queues isolated — they never cross-match", async () => {
+    const duel = await post("isolated-duel", "duel");
     const classic = await post("isolated-classic", "classic");
-    const speed = await post("isolated-speed", "speed_round");
     // Both pending, neither sees the other.
+    expect(duel.status).toBe("pending");
     expect(classic.status).toBe("pending");
-    expect(speed.status).toBe("pending");
-    const pollA = await pollOnce("isolated-classic", classic.token!);
+    const pollA = await pollOnce("isolated-duel", duel.token!);
     expect(pollA.status).toBe("waiting");
   });
 

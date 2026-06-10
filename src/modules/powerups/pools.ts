@@ -1,60 +1,13 @@
-import { definitionsForCategory } from "./index";
-import type { Category, PowerUpDefinition, Rarity } from "./types";
-
-// Trigger → category mapping. Each earning trigger draws from a specific
-// thematic pool. Adding a new trigger = appending one row.
-export type DropSource =
-  | "score_threshold"
-  | "rare_letter"
-  | "long_word"
-  | "chain_length";
-
-export const TRIGGER_CATEGORY: Record<DropSource, Category> = {
-  score_threshold: "defensive",
-  rare_letter: "offensive",
-  long_word: "offensive",
-  chain_length: "disruption",
-};
-
-// Number of words in the chain that triggers the "long chain" disruption drop.
-export const CHAIN_LENGTH_THRESHOLD = 10;
-
 // Chain length at which the Danger Zone begins.
-export const DANGER_ZONE_CHAIN_THRESHOLD = 12;
+export const DANGER_ZONE_CHAIN_THRESHOLD = 16;
 
 // Score multiplier applied to all words in the Danger Zone.
-export const DANGER_ZONE_MULTIPLIER = 3;
+export const DANGER_ZONE_MULTIPLIER = 2;
 
-// Rarity weights within a pool. Forward-compatible: in Phase 1 every
-// definition is `common`, so this is effectively a no-op.
-export const RARITY_WEIGHTS: Record<Rarity, number> = {
-  common: 60,
-  uncommon: 30,
-  rare: 10,
-};
+// Timer in milliseconds during the Danger Zone.
+export const DANGER_ZONE_TIMER_MS = 10_000;
 
-// Pure: pick one definition from the given category, weighted by rarity.
-// Returns undefined if the category is empty.
-export function pickFromCategory(
-  category: Category,
-  rng: () => number
-): PowerUpDefinition | undefined {
-  const pool = definitionsForCategory(category);
-  if (pool.length === 0) return undefined;
-
-  const totalWeight = pool.reduce(
-    (sum, def) => sum + (RARITY_WEIGHTS[def.rarity] ?? 0),
-    0
-  );
-  if (totalWeight === 0) return pool[0];
-
-  let roll = rng() * totalWeight;
-  for (const def of pool) {
-    roll -= RARITY_WEIGHTS[def.rarity] ?? 0;
-    if (roll <= 0) return def;
-  }
-  return pool[pool.length - 1];
-}
-
-// Score threshold for a drop. Tunable.
-export const SCORE_THRESHOLD_POINTS = 15;
+// Rare letter tiers used by ScoringEngine and PowerUpEngine trigger evaluation.
+export const RARE_TIER_1 = new Set(["Q", "X", "Z", "J"]);
+export const RARE_TIER_2 = new Set(["V", "K", "W"]);
+export const RARE_TIER_3 = new Set(["F", "H", "Y", "B"]);

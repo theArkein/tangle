@@ -3,17 +3,14 @@
 import Link from 'next/link'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
-import Badge from '@/components/ui/Badge'
 import WordPill from '@/components/ui/WordPill'
 import {
   POWER_UP_GUIDE,
   POWER_UP_LABELS,
   CATEGORY_META,
-  DROP_TRIGGERS,
-  RARITY_WEIGHTS,
+  EARN_TRIGGERS,
   GAME_MODES,
   type PowerUpCategory,
-  type PowerUpRarity,
   type PowerUpGuideEntry,
 } from '@/lib/powerups'
 
@@ -24,12 +21,6 @@ const SECTIONS: Array<{ id: string; label: string }> = [
   { id: 'earning', label: 'Earning' },
   { id: 'modes', label: 'Modes' },
 ]
-
-function rarityBadgeVariant(r: PowerUpRarity): 'neutral' | 'info' | 'rare' {
-  if (r === 'rare') return 'rare'
-  if (r === 'uncommon') return 'info'
-  return 'neutral'
-}
 
 const SectionTitle = ({ id, children, eyebrow }: { id: string; children: string; eyebrow?: string }) => (
   <div id={id} style={{ scrollMarginTop: 80, marginBottom: 16 }}>
@@ -77,9 +68,20 @@ function PowerUpCard({ entry }: { entry: PowerUpGuideEntry }) {
             <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 15, color: 'var(--n900)' }}>
               {entry.name}
             </div>
-            <Badge variant={rarityBadgeVariant(entry.rarity)} size="xs">
-              {entry.rarity}
-            </Badge>
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                color: 'var(--n400)',
+                background: 'var(--n100)',
+                padding: '2px 6px',
+                borderRadius: 'var(--radius-full)',
+              }}
+            >
+              {entry.category}
+            </span>
           </div>
           <div style={{ fontSize: 13, color: 'var(--n500)', marginTop: 2 }}>{entry.description}</div>
         </div>
@@ -108,7 +110,6 @@ export default function GuidePage() {
     defensive: [],
     offensive: [],
     disruption: [],
-    chaos: [],
   }
   for (const e of POWER_UP_GUIDE) groupedByCategory[e.category].push(e)
 
@@ -182,28 +183,26 @@ export default function GuidePage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
             <div>
               <div style={{ fontSize: 11, color: 'var(--n400)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                Faults
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--n700)' }}>
-                Invalid words count as a fault. Classic gives you <strong>8 lives</strong> per round. Speed Round
-                gives you <strong>1</strong>.
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--n400)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                Win condition
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--n700)' }}>
-                Classic is <strong>best of 5</strong> — first to 3 round wins takes the match. Speed Round is one
-                round, winner-take-all.
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--n400)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
                 Timer
               </div>
               <div style={{ fontSize: 13, color: 'var(--n700)' }}>
-                60 seconds per turn in Classic, 8 seconds in Speed Round. Run out and you forfeit the round.
+                <strong>Duel:</strong> 25s per turn. <strong>Classic:</strong> 8s per turn.
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--n400)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                Round win (Duel)
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--n700)' }}>
+                Build a <strong>59-point gap</strong> over your opponent to win the round. Run out of time and you lose.
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--n400)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                Format
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--n700)' }}>
+                Duel is best of 5 — first to 3 round wins. Classic is a single round.
               </div>
             </div>
           </div>
@@ -221,14 +220,19 @@ export default function GuidePage() {
               <strong>Base:</strong> 1 point per letter.
             </li>
             <li style={{ fontSize: 14, color: 'var(--n700)', lineHeight: 1.5 }}>
-              <strong>Rare letter bonus:</strong> +1 for each <code>Q</code>, <code>X</code>, <code>Z</code>, or{' '}
-              <code>J</code> in the word.
+              <strong>Tier 1 rare:</strong> +3 per <code>Q</code>, <code>X</code>, <code>Z</code>, or <code>J</code>.
+            </li>
+            <li style={{ fontSize: 14, color: 'var(--n700)', lineHeight: 1.5 }}>
+              <strong>Tier 2 rare:</strong> +2 per <code>V</code>, <code>K</code>, or <code>W</code>.
+            </li>
+            <li style={{ fontSize: 14, color: 'var(--n700)', lineHeight: 1.5 }}>
+              <strong>Tier 3 rare:</strong> +1 per <code>F</code>, <code>H</code>, <code>Y</code>, or <code>B</code>.
             </li>
             <li style={{ fontSize: 14, color: 'var(--n700)', lineHeight: 1.5 }}>
               <strong>Long word bonus:</strong> +5 if the word is 8 letters or longer.
             </li>
             <li style={{ fontSize: 14, color: 'var(--n700)', lineHeight: 1.5 }}>
-              <strong>Wildfire multiplier:</strong> 3× total when Wildfire is active.
+              <strong>Danger Zone:</strong> 2× multiplier when the chain reaches 16+ words.
             </li>
           </ul>
         </Card>
@@ -239,7 +243,7 @@ export default function GuidePage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
             <WordPill word="jazzy" variant="player1" />
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--n500)' }}>
-              5 letters + J + Z + Z = 5 + 3 = <strong>8 pts</strong>
+              5 letters + J(+3) + Z(+3) + Z(+3) = <strong>14 pts</strong>
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -254,7 +258,7 @@ export default function GuidePage() {
       {/* Section 3: Power-ups */}
       <section style={{ marginBottom: 36 }}>
         <SectionTitle id="powerups" eyebrow="03 · Power-ups">
-          The 12 power-ups
+          The 7 power-ups
         </SectionTitle>
         {(Object.keys(CATEGORY_META) as PowerUpCategory[]).map(cat => (
           <div key={cat} style={{ marginBottom: 22 }}>
@@ -282,52 +286,36 @@ export default function GuidePage() {
         </SectionTitle>
         <Card style={{ padding: 18, marginBottom: 12 }}>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--n700)', lineHeight: 1.6 }}>
-            Power-ups drop <strong>during the round</strong>, not at the end. Each trigger draws from a specific
-            category pool — so a strong offensive play earns an offensive tool, a long chain earns a disruption tool,
-            and so on.
+            Power-ups are earned <strong>deterministically</strong> — specific actions always earn specific power-ups.
+            No randomness, no pools. Play well and you know exactly what you get.
           </p>
           <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--n500)' }}>
             Your inventory resets at the start of every round. Fresh canvas each time.
           </p>
         </Card>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginBottom: 12 }}>
-          {DROP_TRIGGERS.map(t => (
-            <Card key={t.id} style={{ padding: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+          {EARN_TRIGGERS.map(t => (
+            <Card key={t.powerup} style={{ padding: 16 }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                 <div style={{ fontSize: 22 }}>{t.emoji}</div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                    <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 14, color: 'var(--n900)' }}>
-                      {t.title}
-                    </div>
-                    <Badge variant="accent" size="xs">
-                      {t.pool}
-                    </Badge>
+                  <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 14, color: 'var(--n900)', marginBottom: 4 }}>
+                    {POWER_UP_LABELS[t.powerup].name}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--n600)', lineHeight: 1.5, marginBottom: 6 }}>{t.detail}</div>
-                  <div style={{ fontSize: 11, color: 'var(--n400)' }}>{t.cap}</div>
+                  <div style={{ fontSize: 12, color: 'var(--n600)', lineHeight: 1.5, marginBottom: 4 }}>{t.trigger}</div>
+                  <div style={{ fontSize: 11, color: 'var(--n400)' }}>{t.notes}</div>
                 </div>
               </div>
             </Card>
           ))}
         </div>
-
-        <Card style={{ padding: 18 }}>
-          <div style={{ fontFamily: 'var(--font-heading)', fontSize: 12, fontWeight: 600, color: 'var(--n400)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-            Within a pool
-          </div>
-          <p style={{ margin: 0, fontSize: 13, color: 'var(--n700)', lineHeight: 1.5 }}>
-            The specific power-up is picked by rarity weight: <strong>{RARITY_WEIGHTS.common}% common</strong>,{' '}
-            <strong>{RARITY_WEIGHTS.uncommon}% uncommon</strong>, <strong>{RARITY_WEIGHTS.rare}% rare</strong>.
-          </p>
-        </Card>
       </section>
 
       {/* Section 5: Modes */}
       <section style={{ marginBottom: 36 }}>
         <SectionTitle id="modes" eyebrow="05 · Modes">
-          Classic vs Speed Round
+          Duel vs Classic
         </SectionTitle>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
           {(Object.entries(GAME_MODES) as Array<[keyof typeof GAME_MODES, typeof GAME_MODES[keyof typeof GAME_MODES]]>).map(([key, m]) => (
@@ -342,8 +330,6 @@ export default function GuidePage() {
               <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 12, rowGap: 6, fontSize: 13 }}>
                 <dt style={{ color: 'var(--n400)' }}>Turn timer</dt>
                 <dd style={{ margin: 0, color: 'var(--n800)' }}>{m.turnTimerSec}s</dd>
-                <dt style={{ color: 'var(--n400)' }}>Faults to lose</dt>
-                <dd style={{ margin: 0, color: 'var(--n800)' }}>{m.faultsToLose}</dd>
                 <dt style={{ color: 'var(--n400)' }}>Format</dt>
                 <dd style={{ margin: 0, color: 'var(--n800)' }}>{m.bestOf}</dd>
                 <dt style={{ color: 'var(--n400)' }}>Power-ups</dt>
