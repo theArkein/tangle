@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh auth *)",
+      "Bash(gh repo *)",
+      "Bash(gh issue *)",
+      "Bash(npm --version)",
+      "Bash(npx wrangler *)"
+    ]
+  }
+}

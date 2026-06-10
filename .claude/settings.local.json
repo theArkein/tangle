@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh auth *)",
+      "Bash(gh repo *)",
+      "Bash(gh issue *)",
+      "Bash(npm --version)",
+      "Bash(npx wrangler *)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npm run *)",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(jobs)",
+      "Bash(curl -s http://localhost:57976)",
+      "Bash(curl -s --max-time 5 http://localhost:57976/)",
+      "Bash(kill 8771)",
+      "Bash(curl -s --max-time 5 http://localhost:3000/)",
+      "Bash(npx tsc *)",
+      "Bash(curl -s http://localhost:3000/mockup)",
+      "Bash(curl -s --max-time 8 http://localhost:3000/mockup)",
+      "Bash(curl -v --max-time 8 http://localhost:3000/mockup)",
+      "Bash(curl -Ls --max-time 8 http://localhost:3000/mockup/)",
+      "Bash(curl -s http://localhost:3000/mockup/)"
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+{"type":"server-started","port":63849,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:63849","screen_dir":"/Users/openCafe/Desktop/Personal/tangle/.superpowers/brainstorm/83065-1780737572/content","state_dir":"/Users/openCafe/Desktop/Personal/tangle/.superpowers/brainstorm/83065-1780737572/state"}
+{"type":"screen-added","file":"/Users/openCafe/Desktop/Personal/tangle/.superpowers/brainstorm/83065-1780737572/content/scope.html"}
+{"source":"user-event","type":"click","text":"C\n    \n      Full redesign + new screens\n      Everything in B, plus add the Profile and League screens from the prototype. Gives the app full depth and navigation.\n      \n        ~1 week of work\n        Adds screens that need backend APIs\n        Most ambitious — plan backend + frontend together","choice":"c","id":null,"timestamp":1780737654306}
+{"type":"screen-added","file":"/Users/openCafe/Desktop/Personal/tangle/.superpowers/brainstorm/83065-1780737572/content/waiting-1.html"}
+{"type":"screen-added","file":"/Users/openCafe/Desktop/Personal/tangle/.superpowers/brainstorm/83065-1780737572/content/design-architecture.html"}
+{"type":"screen-added","file":"/Users/openCafe/Desktop/Personal/tangle/.superpowers/brainstorm/83065-1780737572/content/design-screens.html"}

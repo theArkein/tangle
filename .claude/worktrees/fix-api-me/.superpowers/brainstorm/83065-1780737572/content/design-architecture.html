@@ -1,0 +1,72 @@
+<h2>Proposed Architecture</h2>
+<p class="subtitle">How the new UI is structured — check that this matches your intent before we detail each section</p>
+
+<div class="section">
+  <h3>New file structure</h3>
+  <div class="mockup">
+    <div class="mockup-header">frontend/src/</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:13px;line-height:1.8;padding:16px">
+      <div style="color:#78716C">app/</div>
+      <div style="padding-left:20px">layout.tsx &nbsp;<span style="color:#C2A67D">← adds fonts, AppLayout shell</span></div>
+      <div style="padding-left:20px">globals.css &nbsp;<span style="color:#C2A67D">← all design tokens as CSS vars</span></div>
+      <div style="padding-left:20px">page.tsx &nbsp;<span style="color:#C2A67D">← Home/lobby (redesigned)</span></div>
+      <div style="padding-left:20px;color:#78716C">game/page.tsx &nbsp;<span style="color:#C2A67D">← Game screen (redesigned)</span></div>
+      <div style="padding-left:20px;color:#6B8F71">profile/page.tsx &nbsp;<span style="color:#6B8F71">← NEW: Profile screen</span></div>
+      <div style="padding-left:20px;color:#C07070">league/page.tsx &nbsp;<span style="color:#C07070">← NEW: League (disabled/coming soon)</span></div>
+      <div style="margin-top:12px;color:#78716C">components/</div>
+      <div style="padding-left:20px;color:#78716C">layout/</div>
+      <div style="padding-left:40px">AppLayout.tsx &nbsp;<span style="color:#C2A67D">← responsive shell (sidebar + bottom nav)</span></div>
+      <div style="padding-left:40px">Sidebar.tsx &nbsp;<span style="color:#C2A67D">← desktop/tablet fixed sidebar</span></div>
+      <div style="padding-left:40px">BottomNav.tsx &nbsp;<span style="color:#C2A67D">← mobile bottom nav</span></div>
+      <div style="padding-left:20px;color:#78716C">ui/</div>
+      <div style="padding-left:40px">Button.tsx, Badge.tsx, WordPill.tsx</div>
+      <div style="padding-left:40px">Avatar.tsx, TimerBar.tsx, Card.tsx</div>
+      <div style="padding-left:20px;color:#78716C">ServiceWorkerRegistration.tsx &nbsp;<span style="color:#78716C">← unchanged</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Responsive breakpoints (from prototype)</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:8px">
+    <div style="background:#F5F5F4;border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:22px;margin-bottom:6px">📱</div>
+      <div style="font-weight:600;font-size:13px">Mobile</div>
+      <div style="color:#78716C;font-size:12px;margin-top:4px">&lt; 640px</div>
+      <div style="color:#78716C;font-size:12px;margin-top:4px">Bottom nav bar</div>
+    </div>
+    <div style="background:#F5F5F4;border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:22px;margin-bottom:6px">📓</div>
+      <div style="font-weight:600;font-size:13px">Tablet</div>
+      <div style="color:#78716C;font-size:12px;margin-top:4px">640px – 900px</div>
+      <div style="color:#78716C;font-size:12px;margin-top:4px">Collapsed sidebar (icons only)</div>
+    </div>
+    <div style="background:#F5F5F4;border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:22px;margin-bottom:6px">🖥️</div>
+      <div style="font-weight:600;font-size:13px">Desktop</div>
+      <div style="color:#78716C;font-size:12px;margin-top:4px">&gt; 900px</div>
+      <div style="color:#78716C;font-size:12px;margin-top:4px">Full sidebar (220px)</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Navigation items</h3>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+    <div style="background:#F5F5F4;border-radius:8px;padding:8px 14px;font-size:13px">🏠 Home — active</div>
+    <div style="background:#F5F5F4;border-radius:8px;padding:8px 14px;font-size:13px">👤 Profile — active</div>
+    <div style="background:#F5F5F4;border-radius:8px;padding:8px 14px;font-size:13px;color:#A8A29E;text-decoration:line-through">🏅 League — disabled (coming soon)</div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Design tokens (CSS vars in globals.css)</h3>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+    <span style="background:#F5F5F4;border-radius:6px;padding:4px 10px;font-size:12px;font-family:monospace">--color-n0 … --color-n950</span>
+    <span style="background:#F5F5F4;border-radius:6px;padding:4px 10px;font-size:12px;font-family:monospace">--color-accent-warm</span>
+    <span style="background:#F5F5F4;border-radius:6px;padding:4px 10px;font-size:12px;font-family:monospace">--color-success / danger / warning</span>
+    <span style="background:#F5F5F4;border-radius:6px;padding:4px 10px;font-size:12px;font-family:monospace">--color-p1 / p2 / danger-zone</span>
+    <span style="background:#F5F5F4;border-radius:6px;padding:4px 10px;font-size:12px;font-family:monospace">--font-display / heading / body / mono</span>
+    <span style="background:#F5F5F4;border-radius:6px;padding:4px 10px;font-size:12px;font-family:monospace">--radius-sm … --radius-full</span>
+  </div>
+</div>

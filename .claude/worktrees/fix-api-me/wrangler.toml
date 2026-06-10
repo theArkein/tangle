@@ -1,0 +1,34 @@
+name = "tangle"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[durable_objects.bindings]]
+name = "GAME_ROOM"
+class_name = "GameRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameRoom"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tangle-db"
+database_id = "6eb58b66-72dd-45ad-8e2c-d05a79023983"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "c3f048d469864179b4b20a29d9fb5727"
+
+[vars]
+ENVIRONMENT = "development"
+
+[[routes]]
+pattern = "tangle.saradsingh.com.np"
+custom_domain = true
+
+[assets]
+directory = "./frontend/out"
+
+[dev]
+port = 8787
