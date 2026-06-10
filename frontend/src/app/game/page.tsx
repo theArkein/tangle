@@ -1144,14 +1144,18 @@ function GameContent() {
         const iWonRound = ctx?.winnerId === myId
         const iConfirmed = ctx?.nextRoundConfirmations.includes(myId) ?? false
         const opponentConfirmed = ctx?.nextRoundConfirmations.includes(opponentId) ?? false
+        const myRoundWins = matchState.roundWins[myId] ?? 0
+        const oppRoundWins = matchState.roundWins[opponentId] ?? 0
         return (
           <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}>
             <div style={{ width: '100%', maxWidth: 360, background: 'var(--n0)', border: '1px solid var(--n200)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', textAlign: 'center', boxShadow: '0 16px 48px rgba(0,0,0,0.18)' }}>
               <div style={{ fontSize: '36px', marginBottom: '10px' }}>{iWonRound ? '🎉' : '😤'}</div>
-              <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--n400)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
-                Round {ctx?.roundNumber ?? '?'} complete
-              </p>
-              <p style={{ fontFamily: 'var(--font-display)', fontSize: '22px', color: 'var(--n900)', marginBottom: '20px' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '28px', fontWeight: 700, color: 'var(--n900)', marginBottom: '4px' }}>
+                <span style={{ color: 'var(--p1)' }}>{myRoundWins}</span>
+                <span style={{ color: 'var(--n300)', margin: '0 8px' }}>–</span>
+                <span style={{ color: 'var(--p2)' }}>{oppRoundWins}</span>
+              </div>
+              <p style={{ fontFamily: 'var(--font-display)', fontSize: '18px', color: 'var(--n600)', marginBottom: '20px' }}>
                 {iWonRound ? 'You won the round!' : 'Opponent won the round'}
               </p>
               <Button variant="primary" size="lg" full onClick={sendNextRoundRequest} disabled={iConfirmed}>
