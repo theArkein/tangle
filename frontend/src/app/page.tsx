@@ -28,7 +28,7 @@ type Phase = 'idle' | 'waiting'
 type GameMode = 'duel' | 'classic'
 
 const MODES: Record<GameMode, { label: string; detail: string }> = {
-  duel:    { label: 'Duel',    detail: 'Best of 5 · 25s turns · power-ups' },
+  duel:    { label: 'Duel',    detail: '25s turns · power-ups' },
   classic: { label: 'Classic', detail: 'Single round · 8s turns · no power-ups' },
 }
 
@@ -52,7 +52,7 @@ export default function LobbyPage() {
   const [token, setToken] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
   const [mode, setMode] = useState<GameMode>(() => {
-    if (typeof window === 'undefined') return 'classic'
+    if (typeof window === 'undefined') return 'duel'
     const stored = localStorage.getItem('game_mode')
     return (stored === 'duel' || stored === 'classic') ? stored : 'duel'
   })

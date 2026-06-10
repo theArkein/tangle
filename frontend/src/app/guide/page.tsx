@@ -202,7 +202,15 @@ export default function GuidePage() {
                 Format
               </div>
               <div style={{ fontSize: 13, color: 'var(--n700)' }}>
-                Duel is best of 5 — first to 3 round wins. Classic is a single round.
+                Duel is open-ended rounds. Classic is a single round.
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--n400)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                Fault penalty
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--n700)' }}>
+                Invalid word? <strong>−2 seconds</strong> from your turn timer.
               </div>
             </div>
           </div>

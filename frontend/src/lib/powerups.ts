@@ -133,7 +133,7 @@ export const GAME_MODES = {
     emoji: '⚔️',
     turnTimerSec: 25,
     roundsToWinMatch: 3,
-    bestOf: 'Best of 5',
+    bestOf: 'Open-ended',
     powerUpsEnabled: true,
     tagline: 'Tactical. Power-ups in play. Win a round by 59 points.',
   },
