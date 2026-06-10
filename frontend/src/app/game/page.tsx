@@ -120,6 +120,42 @@ const POWER_DESC = Object.fromEntries(
   POWER_UP_GUIDE.map(e => [e.id, { own: e.description, opp: e.opponentDescription }])
 ) as Record<PowerUpId, { own: string; opp: string }>
 
+function PowerUpTooltip({ id, description, children }: { id: PowerUpId; description: string; children: React.ReactNode }) {
+  const [visible, setVisible] = useState(false)
+  return (
+    <span
+      style={{ position: 'relative', display: 'inline-flex' }}
+      onMouseEnter={() => setVisible(true)}
+      onMouseLeave={() => setVisible(false)}
+    >
+      {children}
+      {visible && (
+        <span style={{
+          position: 'absolute',
+          bottom: 'calc(100% + 7px)',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'var(--n900)',
+          color: 'var(--n0)',
+          padding: '6px 9px',
+          borderRadius: 7,
+          fontSize: 11,
+          lineHeight: 1.4,
+          width: 170,
+          textAlign: 'center',
+          pointerEvents: 'none',
+          zIndex: 200,
+          boxShadow: '0 3px 10px rgba(0,0,0,0.30)',
+        } as React.CSSProperties}>
+          <strong style={{ display: 'block', fontSize: 11, marginBottom: 3 }}>{POWER_UP_LABELS[id].name}</strong>
+          {description}
+          <span style={{ position: 'absolute', bottom: -4, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '4px solid var(--n900)' }} />
+        </span>
+      )}
+    </span>
+  )
+}
+
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const S = {
@@ -949,11 +985,13 @@ function GameContent() {
             const count = myInventory[id] ?? 0
             const hl = myHighlights[id]
             return (
-              <span key={id} title={`${POWER_UP_LABELS[id].name}${count > 0 ? ` ×${count}` : ''}`}
-                style={{ fontSize: 11, opacity: count > 0 ? 1 : 0.15, lineHeight: 1.2, position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 1, padding: '1px 2px', animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
-                {POWER_UP_LABELS[id].emoji}
-                {count > 0 && <span style={{ fontSize: 7, fontFamily: 'var(--font-mono)', color: 'var(--p1)', fontWeight: 700, lineHeight: 1 }}>{count}</span>}
-              </span>
+              <PowerUpTooltip key={id} id={id} description={POWER_DESC[id].own}>
+                <span
+                  style={{ fontSize: 11, opacity: count > 0 ? 1 : 0.15, lineHeight: 1.2, position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 1, padding: '1px 2px', animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
+                  {POWER_UP_LABELS[id].emoji}
+                  {count > 0 && <span style={{ fontSize: 7, fontFamily: 'var(--font-mono)', color: 'var(--p1)', fontWeight: 700, lineHeight: 1 }}>{count}</span>}
+                </span>
+              </PowerUpTooltip>
             )
           })}
         </div>
@@ -963,11 +1001,13 @@ function GameContent() {
             const count = opponentInventory[id] ?? 0
             const hl = oppHighlights[id]
             return (
-              <span key={id} title={`${POWER_UP_LABELS[id].name}${count > 0 ? ` ×${count}` : ''}`}
-                style={{ fontSize: 11, opacity: count > 0 ? 1 : 0.15, lineHeight: 1.2, position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 1, padding: '1px 2px', animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
-                {POWER_UP_LABELS[id].emoji}
-                {count > 0 && <span style={{ fontSize: 7, fontFamily: 'var(--font-mono)', color: 'var(--p2)', fontWeight: 700, lineHeight: 1 }}>{count}</span>}
-              </span>
+              <PowerUpTooltip key={id} id={id} description={POWER_DESC[id].opp}>
+                <span
+                  style={{ fontSize: 11, opacity: count > 0 ? 1 : 0.15, lineHeight: 1.2, position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 1, padding: '1px 2px', animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
+                  {POWER_UP_LABELS[id].emoji}
+                  {count > 0 && <span style={{ fontSize: 7, fontFamily: 'var(--font-mono)', color: 'var(--p2)', fontWeight: 700, lineHeight: 1 }}>{count}</span>}
+                </span>
+              </PowerUpTooltip>
             )
           })}
         </div>
@@ -1030,16 +1070,17 @@ function GameContent() {
               const turnLocked = !isMyTurn && id !== 'secondLife' && id !== 'block'
               const hl = myHighlights[id]
               return (
-                <button key={id}
-                  disabled={!earned || turnLocked}
-                  onClick={() => activatePowerUp(id)}
-                  title={`${POWER_UP_LABELS[id].name}${earned ? ` ×${count}` : ''}`}
-                  style={{ position: 'relative', background: 'none', border: 'none', padding: '2px 3px', cursor: earned && !turnLocked ? 'pointer' : 'default', opacity: earned ? (turnLocked ? 0.5 : 1) : 0.2, filter: earned ? 'none' : 'grayscale(1)', flexShrink: 0, animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
-                  <span style={{ fontSize: 22, lineHeight: 1 }}>{POWER_UP_LABELS[id].emoji}</span>
-                  {earned && (
-                    <span style={{ position: 'absolute', top: 0, right: 0, fontSize: 8, fontFamily: 'var(--font-mono)', background: 'var(--p1)', color: 'var(--n0)', borderRadius: '99px', padding: '1px 3px', fontWeight: 700, lineHeight: 1 }}>×{count}</span>
-                  )}
-                </button>
+                <PowerUpTooltip key={id} id={id} description={POWER_DESC[id].own}>
+                  <button
+                    disabled={!earned || turnLocked}
+                    onClick={() => activatePowerUp(id)}
+                    style={{ position: 'relative', background: 'none', border: 'none', padding: '2px 3px', cursor: earned && !turnLocked ? 'pointer' : 'default', opacity: earned ? (turnLocked ? 0.5 : 1) : 0.2, filter: earned ? 'none' : 'grayscale(1)', flexShrink: 0, animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
+                    <span style={{ fontSize: 22, lineHeight: 1 }}>{POWER_UP_LABELS[id].emoji}</span>
+                    {earned && (
+                      <span style={{ position: 'absolute', top: 0, right: 0, fontSize: 8, fontFamily: 'var(--font-mono)', background: 'var(--p1)', color: 'var(--n0)', borderRadius: '99px', padding: '1px 3px', fontWeight: 700, lineHeight: 1 }}>×{count}</span>
+                    )}
+                  </button>
+                </PowerUpTooltip>
               )
             })}
           </div>
