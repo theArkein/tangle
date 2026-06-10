@@ -109,18 +109,18 @@ Each trigger always earns one specific power-up. Players can strategise around e
 
 | Trigger | Earns | Notes |
 |---|---|---|
-| Every 25 points you score | ❄️ Freeze | Resets per player (25, 50, 75...) |
+| Every 25 points you score | ❄️ Freeze | Unlimited — every 25pt milestone (25, 50, 75, 100...) |
 | Play a 10+ letter word | 🎯 Double | Any time |
 | Word contains Q, X, Z or J | 💣 Letter Bomb | Any time |
 | Play an 8+ letter word | ⚓ Anchor | Any time |
 | Play any word in Danger Zone | 💸 Tax | Any time in DZ |
 | Every 6 words you play | 🃏 Wild | Resets per player (6, 12, 18...) — 6 = letters in TANGLE |
-| Every 8 words you play | 💚 Second Life | One path |
-| Single word scores 15+ points | 💚 Second Life | Another path |
-| Word uses 4+ different vowels | 💚 Second Life | Another path (e.g. sequoia, education) |
-| Word contains letters from 2+ rare tiers | 💚 Second Life | Another path (e.g. "quickly" = Q Tier 1 + K Tier 2) |
+| Single word scores 15+ points | 💚 Second Life | Any time |
+| Word uses 4+ different vowels | 💚 Second Life | Any time (e.g. sequoia, education) |
+| Word contains letters from 2+ rare tiers | 💚 Second Life | Any time (e.g. "quickly" = Q Tier 1 + K Tier 2) |
 
-> **Second Life** has 4 earning paths — any one of them triggers it.
+> **Second Life** has 3 earning paths — any one triggers it.
+> **Activation:** manually triggered by the player before their timer runs out (not auto-activating on timeout). Resets the turn timer. ⚠️ Timer reset amount TBD — full reset vs fixed seconds.
 
 ---
 
@@ -152,12 +152,16 @@ Each trigger always earns one specific power-up. Players can strategise around e
 - Deduct 10 from opponent's current round score (floor at 0, cannot go negative)
 - Broadcast score update to both players immediately
 
+### Second Life
+- Manually activated by player on their turn before timer runs out
+- On activation: resets turn timer (amount TBD — full reset vs fixed seconds)
+- NOT auto-activating on timeout
+
 ### Second Life Trigger Evaluation (per word submission)
-Check all 4 paths after each valid word:
-1. `playerWordCount % 8 === 0`
-2. `scoreResult.points >= 15`
-3. `countUniqueVowels(word) >= 4`
-4. `hasLettersFromMultipleRareTiers(word, 2)`
+Check all 3 paths after each valid word:
+1. `scoreResult.points >= 15`
+2. `countUniqueVowels(word) >= 4`
+3. `hasLettersFromMultipleRareTiers(word, 2)`
 
 If any condition is true → award Second Life to that player.
 
