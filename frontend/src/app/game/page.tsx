@@ -154,7 +154,7 @@ function PowerUpTooltip({ id, description, children }: { id: PowerUpId; descript
           zIndex: 9999,
           boxShadow: '0 3px 10px rgba(0,0,0,0.30)',
         } as React.CSSProperties}>
-          <strong style={{ display: 'block', fontSize: 11, marginBottom: 3 }}>{POWER_UP_LABELS[id].name}</strong>
+          <strong style={{ display: 'block', fontSize: 13, marginBottom: 3 }}>{POWER_UP_LABELS[id].emoji} {POWER_UP_LABELS[id].name}</strong>
           {description}
           <span style={{ position: 'absolute', bottom: -4, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '4px solid var(--n900)' }} />
         </span>
