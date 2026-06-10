@@ -2,15 +2,19 @@ import { describe, it, expect } from "vitest";
 import {
   activate,
   addToInventory,
-  consumeSecondLifeOnTimeout,
   consumeLetterBomb,
   emptyInventory,
   emptyTriggers,
   evaluateDrops,
   getLetterBombRequirement,
-  REGISTRY,
+  isWildPending,
+  consumeWild,
+  getDoubleScore,
+  decrementDouble,
+  getAnchor,
+  consumeAnchor,
 } from "../../src/modules/PowerUpEngine";
-import { TRIGGER_CATEGORY, SCORE_THRESHOLD_POINTS } from "../../src/modules/powerups/pools";
+import { score } from "../../src/modules/ScoringEngine";
 import type { DropTriggers } from "../../src/modules/powerups/types";
 
 const P1 = "p1";
@@ -20,131 +24,163 @@ function withTriggers(): DropTriggers {
   return emptyTriggers(P1, P2);
 }
 
-// Deterministic rng — always returns 0, so pickFromCategory picks the first entry of the pool.
-const rng0 = () => 0;
+function mkScoreResult(word: string, multiplier = 1) {
+  return score(word, { multiplier });
+}
 
-describe("PowerUpEngine.evaluateDrops — score thresholds", () => {
-  it("emits one defensive drop when the player crosses a single threshold", () => {
+describe("PowerUpEngine.evaluateDrops — freeze (25pt threshold)", () => {
+  it("emits a freeze drop when the player crosses a 25-point threshold", () => {
     const { drops, triggers } = evaluateDrops({
       playerId: P1,
+      opponentId: P2,
+      word: "apple",
+      scoreResult: mkScoreResult("apple"),
       prevRoundScore: 10,
-      newRoundScore: 20, // crosses 15 once
-      breakdown: { base: 10, rareLetter: 0, longWord: 0 },
+      newRoundScore: 26,
       triggers: withTriggers(),
-      rng: rng0,
     });
 
-    expect(drops).toHaveLength(1);
-    expect(drops[0]?.source).toBe("score_threshold");
-    expect(triggers.thresholdsCrossed[P1]).toBe(1);
+    const freezeDrops = drops.filter((d) => d.id === "freeze");
+    expect(freezeDrops).toHaveLength(1);
+    expect(triggers.playerFreezeThresholds[P1]).toBe(1);
   });
 
-  it("emits multiple drops when a single word crosses several thresholds", () => {
-    const { drops, triggers } = evaluateDrops({
-      playerId: P1,
-      prevRoundScore: 14,
-      newRoundScore: 60, // crosses 15, 30, 45, 60 → 4 thresholds (floor 0→4)
-      breakdown: { base: 46, rareLetter: 0, longWord: 0 },
-      triggers: withTriggers(),
-      rng: rng0,
-    });
-
-    expect(drops).toHaveLength(4);
-    expect(drops.every((d) => d.source === "score_threshold")).toBe(true);
-    expect(triggers.thresholdsCrossed[P1]).toBe(4);
-  });
-
-  it("draws score-threshold drops from the defensive category", () => {
+  it("emits two freeze drops when crossing two 25-point thresholds at once", () => {
     const { drops } = evaluateDrops({
       playerId: P1,
+      opponentId: P2,
+      word: "apple",
+      scoreResult: mkScoreResult("apple"),
       prevRoundScore: 0,
-      newRoundScore: SCORE_THRESHOLD_POINTS,
-      breakdown: { base: SCORE_THRESHOLD_POINTS, rareLetter: 0, longWord: 0 },
+      newRoundScore: 51,
       triggers: withTriggers(),
-      rng: rng0,
     });
-    expect(drops).toHaveLength(1);
-    const def = REGISTRY.find((d) => d.id === drops[0]?.id);
-    expect(def?.category).toBe(TRIGGER_CATEGORY.score_threshold);
+
+    expect(drops.filter((d) => d.id === "freeze")).toHaveLength(2);
   });
 });
 
-describe("PowerUpEngine.evaluateDrops — special-word bonuses", () => {
-  it("grants a rare-letter bonus drop the first time a rare letter is played in a round", () => {
-    const { drops, triggers } = evaluateDrops({
+describe("PowerUpEngine.evaluateDrops — double (10+ letters)", () => {
+  it("emits a double drop for a 10-letter word", () => {
+    const word = "abcdefghij";
+    const { drops } = evaluateDrops({
       playerId: P1,
+      opponentId: P2,
+      word,
+      scoreResult: mkScoreResult(word),
+      prevRoundScore: 0,
+      newRoundScore: 10,
+      triggers: withTriggers(),
+    });
+
+    expect(drops.some((d) => d.id === "double")).toBe(true);
+  });
+
+  it("does not emit double for a 9-letter word", () => {
+    const word = "abcdefghi";
+    const { drops } = evaluateDrops({
+      playerId: P1,
+      opponentId: P2,
+      word,
+      scoreResult: mkScoreResult(word),
+      prevRoundScore: 0,
+      newRoundScore: 9,
+      triggers: withTriggers(),
+    });
+
+    expect(drops.some((d) => d.id === "double")).toBe(false);
+  });
+});
+
+describe("PowerUpEngine.evaluateDrops — anchor (8+ letters)", () => {
+  it("emits an anchor drop for an 8-letter word", () => {
+    const word = "elephant";
+    const { drops } = evaluateDrops({
+      playerId: P1,
+      opponentId: P2,
+      word,
+      scoreResult: mkScoreResult(word),
+      prevRoundScore: 0,
+      newRoundScore: 8,
+      triggers: withTriggers(),
+    });
+
+    expect(drops.some((d) => d.id === "anchor")).toBe(true);
+  });
+});
+
+describe("PowerUpEngine.evaluateDrops — wild (every 6 words)", () => {
+  it("emits a wild drop on the 6th word", () => {
+    const t = { ...withTriggers(), playerWordCounts: { [P1]: 5, [P2]: 0 } };
+    const { drops } = evaluateDrops({
+      playerId: P1,
+      opponentId: P2,
+      word: "abc",
+      scoreResult: mkScoreResult("abc"),
+      prevRoundScore: 0,
+      newRoundScore: 3,
+      triggers: t,
+    });
+
+    expect(drops.some((d) => d.id === "wild")).toBe(true);
+  });
+
+  it("does not emit wild on the 5th word", () => {
+    const t = { ...withTriggers(), playerWordCounts: { [P1]: 4, [P2]: 0 } };
+    const { drops } = evaluateDrops({
+      playerId: P1,
+      opponentId: P2,
+      word: "abc",
+      scoreResult: mkScoreResult("abc"),
+      prevRoundScore: 0,
+      newRoundScore: 3,
+      triggers: t,
+    });
+
+    expect(drops.some((d) => d.id === "wild")).toBe(false);
+  });
+});
+
+describe("PowerUpEngine.evaluateDrops — tax (Danger Zone)", () => {
+  it("emits a tax drop for any word played in the Danger Zone", () => {
+    const { drops } = evaluateDrops({
+      playerId: P1,
+      opponentId: P2,
+      word: "apple",
+      scoreResult: mkScoreResult("apple"),
       prevRoundScore: 0,
       newRoundScore: 5,
-      breakdown: { base: 4, rareLetter: 1, longWord: 0 },
       triggers: withTriggers(),
-      rng: rng0,
+      isDangerZone: true,
     });
-    const rareDrops = drops.filter((d) => d.source === "rare_letter");
-    expect(rareDrops).toHaveLength(1);
-    expect(triggers.rareLetterDropped[P1]).toBe(true);
-  });
 
-  it("does not grant a second rare-letter bonus drop in the same round", () => {
-    const round1 = evaluateDrops({
+    expect(drops.some((d) => d.id === "tax")).toBe(true);
+  });
+});
+
+describe("PowerUpEngine.evaluateDrops — DZ entry secondLife", () => {
+  it("awards secondLife to both players when entering Danger Zone", () => {
+    const { drops } = evaluateDrops({
       playerId: P1,
+      opponentId: P2,
+      word: "apple",
+      scoreResult: mkScoreResult("apple"),
       prevRoundScore: 0,
       newRoundScore: 5,
-      breakdown: { base: 4, rareLetter: 1, longWord: 0 },
       triggers: withTriggers(),
-      rng: rng0,
+      isDangerZone: true,
+      justEnteredDangerZone: true,
     });
 
-    const round2 = evaluateDrops({
-      playerId: P1,
-      prevRoundScore: 5,
-      newRoundScore: 11,
-      breakdown: { base: 5, rareLetter: 1, longWord: 0 },
-      triggers: round1.triggers,
-      rng: rng0,
-    });
-
-    expect(round2.drops.filter((d) => d.source === "rare_letter")).toHaveLength(0);
-  });
-
-  it("grants a long-word bonus drop the first time an 8+ letter word is played", () => {
-    const { drops, triggers } = evaluateDrops({
-      playerId: P1,
-      prevRoundScore: 0,
-      newRoundScore: 13,
-      breakdown: { base: 8, rareLetter: 0, longWord: 5 },
-      triggers: withTriggers(),
-      rng: rng0,
-    });
-    const longDrops = drops.filter((d) => d.source === "long_word");
-    expect(longDrops).toHaveLength(1);
-    expect(triggers.longWordDropped[P1]).toBe(true);
-  });
-
-  it("tracks the rare-letter trigger separately per player", () => {
-    let triggers = withTriggers();
-    const p1Result = evaluateDrops({
-      playerId: P1,
-      prevRoundScore: 0,
-      newRoundScore: 4,
-      breakdown: { base: 3, rareLetter: 1, longWord: 0 },
-      triggers,
-      rng: rng0,
-    });
-    triggers = p1Result.triggers;
-    const p2Result = evaluateDrops({
-      playerId: P2,
-      prevRoundScore: 0,
-      newRoundScore: 4,
-      breakdown: { base: 3, rareLetter: 1, longWord: 0 },
-      triggers,
-      rng: rng0,
-    });
-    expect(p2Result.drops.filter((d) => d.source === "rare_letter")).toHaveLength(1);
+    const slDrops = drops.filter((d) => d.id === "secondLife");
+    const playerIds = slDrops.map((d) => d.playerId).sort();
+    expect(playerIds).toContain(P1);
+    expect(playerIds).toContain(P2);
   });
 });
 
 describe("PowerUpEngine.activate — Freeze", () => {
-  it("decrements inventory and sets a freeze effect on the opponent", () => {
+  it("decrements inventory and returns alarmDeltaMs of 5000", () => {
     const inventory = addToInventory(emptyInventory(), "freeze");
     const result = activate({
       inventory,
@@ -152,17 +188,11 @@ describe("PowerUpEngine.activate — Freeze", () => {
       powerUpId: "freeze",
       byPlayerId: P1,
       opponentId: P2,
-      now: 1_000,
     });
     expect(result.error).toBeUndefined();
     expect(result.inventory.freeze).toBe(0);
-    expect(result.activeEffects).toHaveLength(1);
-    const e = result.activeEffects[0];
-    expect(e?.kind).toBe("freeze");
-    if (e?.kind === "freeze") {
-      expect(e.onPlayerId).toBe(P2);
-      expect(e.expiresAt).toBeGreaterThan(1_000);
-    }
+    expect(result.alarmDeltaMs).toBe(5_000);
+    expect(result.activeEffects).toHaveLength(0);
   });
 
   it("rejects activation when not in inventory", () => {
@@ -172,32 +202,99 @@ describe("PowerUpEngine.activate — Freeze", () => {
       powerUpId: "freeze",
       byPlayerId: P1,
       opponentId: P2,
-      now: 0,
     });
     expect(result.error).toBe("not_in_inventory");
   });
 });
 
-describe("PowerUpEngine — Second Life", () => {
-  it("arms an effect on activation that consumes on timeout instead of losing the round", () => {
-    const inventory = addToInventory(emptyInventory(), "secondLife");
-    const a = activate({
+describe("PowerUpEngine — Double", () => {
+  it("creates a doubleScore effect with 3 words remaining", () => {
+    const inventory = addToInventory(emptyInventory(), "double");
+    const result = activate({
       inventory,
       activeEffects: [],
-      powerUpId: "secondLife",
+      powerUpId: "double",
       byPlayerId: P1,
       opponentId: P2,
-      now: 0,
     });
-    expect(a.error).toBeUndefined();
+    expect(result.error).toBeUndefined();
+    const ds = getDoubleScore(result.activeEffects, P1);
+    expect(ds?.wordsRemaining).toBe(3);
+  });
 
-    const consume = consumeSecondLifeOnTimeout(a.activeEffects, P1);
-    expect(consume.consumed).toBe(true);
-    expect(consume.activeEffects).toHaveLength(0);
+  it("decrements wordsRemaining and removes effect at 0", () => {
+    let effects = activate({
+      inventory: addToInventory(emptyInventory(), "double"),
+      activeEffects: [],
+      powerUpId: "double",
+      byPlayerId: P1,
+      opponentId: P2,
+    }).activeEffects;
 
-    // A second timeout should not be saved by an already-spent Second Life.
-    const reconsume = consumeSecondLifeOnTimeout(consume.activeEffects, P1);
-    expect(reconsume.consumed).toBe(false);
+    effects = decrementDouble(effects, P1);
+    expect(getDoubleScore(effects, P1)?.wordsRemaining).toBe(2);
+    effects = decrementDouble(effects, P1);
+    effects = decrementDouble(effects, P1);
+    expect(getDoubleScore(effects, P1)).toBeUndefined();
+  });
+});
+
+describe("PowerUpEngine — Wild", () => {
+  it("creates a wildPending effect for the activator", () => {
+    const inventory = addToInventory(emptyInventory(), "wild");
+    const result = activate({
+      inventory,
+      activeEffects: [],
+      powerUpId: "wild",
+      byPlayerId: P1,
+      opponentId: P2,
+    });
+    expect(isWildPending(result.activeEffects, P1)).toBe(true);
+    expect(isWildPending(result.activeEffects, P2)).toBe(false);
+  });
+
+  it("consumeWild clears the effect", () => {
+    const effects = [{ kind: "wildPending" as const, forPlayerId: P1 }];
+    const after = consumeWild(effects, P1);
+    expect(isWildPending(after, P1)).toBe(false);
+  });
+});
+
+describe("PowerUpEngine — Anchor", () => {
+  it("sets a minLength=6 constraint on the opponent", () => {
+    const inventory = addToInventory(emptyInventory(), "anchor");
+    const result = activate({
+      inventory,
+      activeEffects: [],
+      powerUpId: "anchor",
+      byPlayerId: P1,
+      opponentId: P2,
+    });
+    const anchor = getAnchor(result.activeEffects, P2);
+    expect(anchor?.minLength).toBe(6);
+  });
+
+  it("consumeAnchor clears the effect", () => {
+    const effects = [{ kind: "anchor" as const, onPlayerId: P2, minLength: 6 }];
+    const after = consumeAnchor(effects, P2);
+    expect(getAnchor(after, P2)).toBeUndefined();
+  });
+});
+
+describe("PowerUpEngine — Tax", () => {
+  it("decrements inventory and sets taxOpponent signal", () => {
+    const inventory = addToInventory(emptyInventory(), "tax");
+    const result = activate({
+      inventory,
+      activeEffects: [],
+      powerUpId: "tax",
+      byPlayerId: P1,
+      opponentId: P2,
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.inventory.tax).toBe(0);
+    expect(result.taxOpponent).toBe(true);
+    expect(result.activeEffects).toHaveLength(0);
   });
 });
 
@@ -210,7 +307,6 @@ describe("PowerUpEngine — Letter Bomb", () => {
       powerUpId: "letterBomb",
       byPlayerId: P1,
       opponentId: P2,
-      now: 0,
       rng: () => 0, // picks "Q"
     });
     expect(a.error).toBeUndefined();
@@ -226,29 +322,10 @@ describe("PowerUpEngine — Letter Bomb", () => {
       powerUpId: "letterBomb",
       byPlayerId: P1,
       opponentId: P2,
-      now: 0,
       rng: () => 0,
     });
     const after = consumeLetterBomb(a.activeEffects, P2);
     expect(after.consumedRequiredLetter).toBe("Q");
     expect(getLetterBombRequirement(after.activeEffects, P2)).toBeUndefined();
-  });
-});
-
-describe("PowerUpEngine — Block", () => {
-  it("decrements inventory but does not set an active effect", () => {
-    const inventory = addToInventory(emptyInventory(), "block");
-    const result = activate({
-      inventory,
-      activeEffects: [],
-      powerUpId: "block",
-      byPlayerId: P1,
-      opponentId: P2,
-      now: 0,
-    });
-    expect(result.error).toBeUndefined();
-    expect(result.inventory.block).toBe(0);
-    expect(result.activeEffects).toHaveLength(0);
-    expect(result.effect).toBeUndefined();
   });
 });

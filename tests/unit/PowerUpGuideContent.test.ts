@@ -4,8 +4,6 @@ import { POWER_UP_GUIDE, POWER_UP_LABELS } from "../../frontend/src/lib/powerups
 
 // The frontend guide hand-authors longer-form text (howItWorks, example) but
 // the id / name / description fields must match the worker registry exactly.
-// This test catches drift the moment it happens — a registry rename or
-// description tweak that the guide doesn't follow.
 describe("Power-up guide vs worker registry", () => {
   it("covers every registry power-up exactly once", () => {
     const registryIds = REGISTRY.map((d) => d.id).sort();
@@ -20,7 +18,6 @@ describe("Power-up guide vs worker registry", () => {
       expect(entry.name, `name for ${entry.id}`).toBe(def!.name);
       expect(entry.description, `description for ${entry.id}`).toBe(def!.description);
       expect(entry.category, `category for ${entry.id}`).toBe(def!.category);
-      expect(entry.rarity, `rarity for ${entry.id}`).toBe(def!.rarity);
     }
   });
 

@@ -15,29 +15,21 @@ import {
 import {
   activate as activatePowerUp,
   addToInventory,
-  consumeSecondLifeOnTimeout,
   consumeLetterBomb,
-  consumeShrink,
-  consumeRush,
-  consumeBlitz,
-  consumeSwapPending,
-  decrementBlind,
-  decrementPeek,
-  decrementWildfire,
   evaluateDrops,
   getLetterBombRequirement,
-  getShrinkMaxLength,
-  getWildfireMultiplier,
-  isBlinded,
-  isPeekActive,
-  isBlitzClaimed,
+  isWildPending,
+  consumeWild,
+  decrementDouble,
+  getDoubleScore,
+  getAnchor,
+  consumeAnchor,
 } from "../modules/PowerUpEngine";
-import { FREEZE_DURATION_MS, RUSH_TIMER_FRACTION } from "../modules/powerups";
 import type { PowerUpId } from "../modules/powerups/types";
 import {
-  pickFromCategory,
   DANGER_ZONE_CHAIN_THRESHOLD,
   DANGER_ZONE_MULTIPLIER,
+  DANGER_ZONE_TIMER_MS,
 } from "../modules/powerups/pools";
 import {
   getModeConfig,
@@ -47,7 +39,6 @@ import {
 
 const REMATCH_TIMEOUT_MS = 30_000;
 const NEXT_ROUND_TIMEOUT_MS = 30_000;
-const DANGER_ZONE_TIMER_MS = 10_000;
 const SEED_LETTERS = "abcdefghijklmnoprstw";
 
 type AlarmKind = "turn" | "rematch" | "next_round" | "bot_turn";
@@ -90,7 +81,6 @@ export class GameRoom implements DurableObject {
     if (url.pathname === "/init" && request.method === "POST") {
       const stored = await this.loadRoom();
       stored.initialized = true;
-      // Optional body { mode }
       try {
         const body = (await request.json()) as { mode?: unknown };
         if (isValidGameMode(body.mode)) stored.gameMode = body.mode;
@@ -128,7 +118,7 @@ export class GameRoom implements DurableObject {
       roomId: this.state.id.name ?? this.state.id.toString(),
       status: stored.matchState?.status ?? "waiting",
       players: stored.playerIds,
-      mode: stored.gameMode ?? "classic",
+      mode: stored.gameMode ?? "duel",
     });
   }
 
@@ -144,7 +134,7 @@ export class GameRoom implements DurableObject {
     return Response.json({
       status: stored.matchState?.status ?? "waiting",
       playersConnected: stored.playerIds.length,
-      mode: stored.gameMode ?? "classic",
+      mode: stored.gameMode ?? "duel",
     });
   }
 
@@ -158,8 +148,6 @@ export class GameRoom implements DurableObject {
       return new Response("Room full", { status: 403 });
     }
 
-    // If the mode wasn't already set on the room, check KV for one matchmaking
-    // stashed under match:room:{roomId}:mode.
     if (!stored.gameMode) {
       const roomName = this.state.id.name ?? this.state.id.toString();
       const mode = await this.env.KV.get(`match:room:${roomName}:mode`);
@@ -185,7 +173,7 @@ export class GameRoom implements DurableObject {
         JSON.stringify({
           type: "waiting",
           playerCount: stored.playerIds.length,
-          mode: stored.gameMode ?? "classic",
+          mode: stored.gameMode ?? "duel",
         })
       );
     }
@@ -196,7 +184,7 @@ export class GameRoom implements DurableObject {
   private async startMatch(stored: RoomStorage): Promise<void> {
     const [p1, p2] = stored.playerIds as [string, string];
     const seedLetter = randomSeedLetter();
-    const mode: GameMode = stored.gameMode ?? "classic";
+    const mode: GameMode = stored.gameMode ?? "duel";
 
     const waitingState: MatchState = {
       status: "waiting",
@@ -261,11 +249,6 @@ export class GameRoom implements DurableObject {
       return;
     }
 
-    if (type === "swap_choose_letter" && typeof data.letter === "string") {
-      await this.handleSwapChooseLetter(ws, playerId, (data.letter as string).trim());
-      return;
-    }
-
     if (type === "send_reaction" && typeof data.reaction === "string") {
       this.broadcastAll(
         JSON.stringify({
@@ -274,11 +257,6 @@ export class GameRoom implements DurableObject {
           reaction: data.reaction,
         })
       );
-      return;
-    }
-
-    if (type === "typing_update" && typeof data.partial === "string") {
-      await this.handleTypingUpdate(playerId, data.partial as string);
       return;
     }
   }
@@ -305,13 +283,16 @@ export class GameRoom implements DurableObject {
 
     const usedWords = new Set(round.chain);
     const requiredContainingLetter = getLetterBombRequirement(round.activeEffects, playerId);
-    const maxLength = getShrinkMaxLength(round.activeEffects, playerId);
+    const anchorEffect = getAnchor(round.activeEffects, playerId);
+    const minLength = anchorEffect?.minLength;
+    const skipLetterCheck = isWildPending(round.activeEffects, playerId);
+
     const validation = await validate(
       word,
       round.seedLetter,
       usedWords,
       this.dictionary,
-      { requiredContainingLetter, maxLength }
+      { requiredContainingLetter, minLength, skipLetterCheck }
     );
 
     if (!validation.valid) {
@@ -319,17 +300,13 @@ export class GameRoom implements DurableObject {
         JSON.stringify({ type: "word_result", valid: false, reason: validation.reason })
       );
 
-      const prevRoundNumber = round.roundNumber;
       const result = transition(stored.matchState, { type: "invalidWord", playerId });
       stored.matchState = result.state;
-
-      this.saveRoundHistoryIfEnded(stored, prevRoundNumber);
 
       await this.saveRoom(stored);
       await this.applyEffects(result.effects, stored);
 
-      // Deduct 2 seconds from the remaining turn time for an invalid word,
-      // but only if the round is still active (fault didn't just end the round).
+      // Deduct 2 seconds from the remaining turn time for an invalid word.
       if (stored.matchState?.status === "round_active" && stored.turnStartAt !== undefined) {
         const currentAlarm = await this.state.storage.getAlarm();
         if (currentAlarm !== null) {
@@ -344,12 +321,18 @@ export class GameRoom implements DurableObject {
     }
 
     const chainLengthAfter = round.chain.length + 1;
-    const isDangerZone =
-      this.dangerZoneEnabled && chainLengthAfter >= DANGER_ZONE_CHAIN_THRESHOLD;
-    // No-stack: DZ multiplier takes precedence over Wildfire (both are 3×).
+    const wasDangerZone = this.dangerZoneEnabled && round.chain.length >= DANGER_ZONE_CHAIN_THRESHOLD;
+    const isDangerZone = this.dangerZoneEnabled && chainLengthAfter >= DANGER_ZONE_CHAIN_THRESHOLD;
+    const justEnteredDangerZone = isDangerZone && !wasDangerZone;
+
+    // Determine multiplier: DZ takes precedence over doubleScore — they do not stack.
+    const doubleEffect = getDoubleScore(round.activeEffects, playerId);
     const multiplier = isDangerZone
       ? DANGER_ZONE_MULTIPLIER
-      : getWildfireMultiplier(round.activeEffects);
+      : doubleEffect
+      ? 2
+      : 1;
+
     const scoreResult = score(word, { multiplier });
     ws.send(
       JSON.stringify({
@@ -371,38 +354,31 @@ export class GameRoom implements DurableObject {
     const prevRoundScore = round.playerRoundScores[playerId] ?? 0;
     const newRoundScore = prevRoundScore + scoreResult.points;
 
-    const evalResult = evaluateDrops({
-      playerId,
-      prevRoundScore,
-      newRoundScore,
-      breakdown: scoreResult.breakdown,
-      triggers: round.dropTriggers,
-      chainLength: chainLengthAfter,
-      isDangerZone,
-    });
-
-    // Consume single-turn effects on the player who just played.
+    // Consume single-turn effects.
     let effectsAfter = round.activeEffects;
     effectsAfter = consumeLetterBomb(effectsAfter, playerId).activeEffects;
-    effectsAfter = consumeShrink(effectsAfter, playerId).activeEffects;
-    // Decrement per-turn counters across the board.
-    effectsAfter = decrementBlind(effectsAfter);
-    effectsAfter = decrementPeek(effectsAfter);
-    effectsAfter = decrementWildfire(effectsAfter);
+    if (anchorEffect) effectsAfter = consumeAnchor(effectsAfter, playerId);
+    if (skipLetterCheck) effectsAfter = consumeWild(effectsAfter, playerId);
+    if (doubleEffect && !isDangerZone) effectsAfter = decrementDouble(effectsAfter, playerId);
 
-    // Blitz: if activator claimed Blitz, they get another turn — override next player.
-    const blitz = isBlitzClaimed(effectsAfter, playerId);
-    const nextPlayerOverride = blitz ? playerId : undefined;
-    if (blitz) {
-      effectsAfter = consumeBlitz(effectsAfter, playerId);
-    }
+    // Evaluate deterministic power-up drops.
+    const evalResult = evaluateDrops({
+      playerId,
+      opponentId,
+      word,
+      scoreResult,
+      prevRoundScore,
+      newRoundScore,
+      triggers: round.dropTriggers,
+      isDangerZone,
+      justEnteredDangerZone,
+    });
 
     const wordResult = transition(stored.matchState, {
       type: "wordSubmitted",
       playerId,
       word,
       points: scoreResult.points,
-      nextPlayerOverride,
     });
     stored.matchState = wordResult.state;
 
@@ -421,27 +397,13 @@ export class GameRoom implements DurableObject {
           );
         }
       }
-
-      // Danger Zone entry: award one Chaos drop to both players, once per round.
-      const enteringDangerZone =
-        isDangerZone && !stored.matchState.currentRound.dropTriggers.dangerZoneDropped;
-      if (enteringDangerZone) {
-        stored.matchState.currentRound.dropTriggers.dangerZoneDropped = true;
-        for (const pid of stored.playerIds) {
-          const def = pickFromCategory("chaos", Math.random);
-          if (def) {
-            const inv = stored.matchState.currentRound.powerUpInventory[pid];
-            if (inv) {
-              stored.matchState.currentRound.powerUpInventory[pid] = addToInventory(inv, def.id);
-            }
-            evalResult.drops.push({ playerId: pid, id: def.id, source: "danger_zone" as never });
-          }
-        }
-        this.broadcastAll(JSON.stringify({ type: "danger_zone_entered" }));
-      }
     }
 
     stored.scores[playerId] = (stored.scores[playerId] ?? 0) + scoreResult.points;
+
+    if (justEnteredDangerZone) {
+      this.broadcastAll(JSON.stringify({ type: "danger_zone_entered" }));
+    }
 
     for (const drop of evalResult.drops) {
       this.broadcastAll(
@@ -449,14 +411,11 @@ export class GameRoom implements DurableObject {
           type: "power_up_earned",
           playerId: drop.playerId,
           powerup: drop.id,
-          source: drop.source,
         })
       );
     }
 
-    // Suppress opponent's "typing" view when their turn starts; they'll send
-    // fresh partials if Peek is active.
-    void opponentId;
+    this.saveRoundHistoryIfEnded(stored, round.roundNumber);
 
     await this.saveRoom(stored);
     await this.applyEffects(wordResult.effects, stored);
@@ -505,7 +464,6 @@ export class GameRoom implements DurableObject {
     const round = stored.matchState.currentRound;
     if (!round) return;
 
-    // Speed Round disables power-ups.
     const modeConfig = getModeConfig(stored.matchState.gameMode);
     if (!modeConfig.powerUpsEnabled) {
       ws.send(JSON.stringify({ type: "error", message: "powerups_disabled" }));
@@ -523,13 +481,40 @@ export class GameRoom implements DurableObject {
       return;
     }
 
+    // Second Life — instant timer reset; handled separately (no ActiveEffect needed).
+    if (powerUpId === "secondLife") {
+      if ((inventory.secondLife ?? 0) <= 0) {
+        ws.send(JSON.stringify({ type: "error", message: "not_in_inventory" }));
+        return;
+      }
+      round.powerUpInventory[playerId] = {
+        ...inventory,
+        secondLife: inventory.secondLife - 1,
+      };
+      const inDZ =
+        this.dangerZoneEnabled &&
+        (round.chain.length) >= DANGER_ZONE_CHAIN_THRESHOLD;
+      const resetMs = inDZ ? DANGER_ZONE_TIMER_MS : modeConfig.turnTimeoutMs;
+      stored.turnStartAt = Date.now();
+      await this.saveRoom(stored);
+      await this.state.storage.setAlarm(Date.now() + resetMs);
+      this.broadcastAll(
+        JSON.stringify({
+          type: "second_life_consumed",
+          playerId,
+          byPlayerId: playerId,
+        })
+      );
+      this.broadcastStateAll(stored);
+      return;
+    }
+
     const result = activatePowerUp({
       inventory,
       activeEffects: round.activeEffects,
       powerUpId,
       byPlayerId: playerId,
       opponentId,
-      now: Date.now(),
     });
 
     if (result.error) {
@@ -540,110 +525,22 @@ export class GameRoom implements DurableObject {
     round.powerUpInventory[playerId] = result.inventory;
     round.activeEffects = result.activeEffects;
 
-    // Block: remove opponent's last word.
-    if (powerUpId === "block") {
-      const blockResult = transition(stored.matchState, {
-        type: "blockApplied",
-        byPlayerId: playerId,
-      });
-      stored.matchState = blockResult.state;
-      if (stored.matchState.currentRound) {
-        stored.matchState.currentRound.powerUpInventory = round.powerUpInventory;
-        stored.matchState.currentRound.activeEffects = round.activeEffects;
+    // Freeze — extend current alarm by 5 seconds.
+    if (result.alarmDeltaMs) {
+      const currentAlarm = await this.state.storage.getAlarm();
+      if (currentAlarm !== null) {
+        await this.state.storage.setAlarm(currentAlarm + result.alarmDeltaMs);
+        stored.turnStartAt = (stored.turnStartAt ?? Date.now()) + result.alarmDeltaMs;
       }
-
-      const newChain = stored.matchState.currentRound?.chain ?? [];
-      const newLastWord = newChain[newChain.length - 1];
-      if (stored.matchState.currentRound) {
-        stored.matchState.currentRound.seedLetter = newLastWord
-          ? newLastWord[newLastWord.length - 1] ?? round.seedLetter
-          : round.seedLetter;
-      }
-
-      this.broadcastAll(
-        JSON.stringify({
-          type: "power_up_activated",
-          powerup: "block",
-          byPlayerId: playerId,
-          targetPlayerId: opponentId,
-        })
-      );
-
-      await this.saveRoom(stored);
-      await this.applyEffects(blockResult.effects, stored);
-      return;
     }
 
-    // Steal: take opponent's last word + transfer its points.
-    if (powerUpId === "steal") {
-      // Find opponent's last word in the chain
-      const oppLastIdx = [...round.chain]
-        .map((w, i) => ({ w, i }))
-        .reverse()
-        .find(({ i }) => stored.currentRoundWords[i]?.playerId === opponentId)?.i;
-
-      if (oppLastIdx === undefined) {
-        ws.send(JSON.stringify({ type: "error", message: "no_word_to_steal" }));
-        return;
-      }
-
-      const stolenEntry = stored.currentRoundWords[oppLastIdx];
-      if (!stolenEntry) {
-        ws.send(JSON.stringify({ type: "error", message: "no_word_to_steal" }));
-        return;
-      }
-
-      // Remove the stolen word from the chain and from currentRoundWords.
-      if (stored.matchState.currentRound) {
-        stored.matchState.currentRound.chain.splice(oppLastIdx, 1);
-        stored.currentRoundWords.splice(oppLastIdx, 1);
-
-        // Transfer points.
-        const opponentScore =
-          stored.matchState.currentRound.playerRoundScores[opponentId] ?? 0;
-        stored.matchState.currentRound.playerRoundScores[opponentId] = Math.max(
-          0,
-          opponentScore - stolenEntry.points
-        );
-        const myScore = stored.matchState.currentRound.playerRoundScores[playerId] ?? 0;
-        stored.matchState.currentRound.playerRoundScores[playerId] =
-          myScore + stolenEntry.points;
-        stored.scores[opponentId] = Math.max(
-          0,
-          (stored.scores[opponentId] ?? 0) - stolenEntry.points
-        );
-        stored.scores[playerId] = (stored.scores[playerId] ?? 0) + stolenEntry.points;
-
-        // Recalculate seed letter from new chain tail.
-        const newChain = stored.matchState.currentRound.chain;
-        const newLastWord = newChain[newChain.length - 1];
-        stored.matchState.currentRound.seedLetter = newLastWord
-          ? newLastWord[newLastWord.length - 1] ?? stored.matchState.currentRound.seedLetter
-          : stored.matchState.currentRound.seedLetter;
-      }
-
-      this.broadcastAll(
-        JSON.stringify({
-          type: "power_up_activated",
-          powerup: "steal",
-          byPlayerId: playerId,
-          targetPlayerId: opponentId,
-          word: stolenEntry.word,
-          points: stolenEntry.points,
-        })
-      );
-
-      await this.saveRoom(stored);
-      await this.applyEffects([{ type: "broadcastState" }], stored);
-      return;
+    // Tax — deduct 10 from opponent's round score and match score (floor at 0).
+    if (result.taxOpponent) {
+      const opponentRoundScore = round.playerRoundScores[opponentId] ?? 0;
+      round.playerRoundScores[opponentId] = Math.max(0, opponentRoundScore - 10);
+      stored.scores[opponentId] = Math.max(0, (stored.scores[opponentId] ?? 0) - 10);
     }
 
-    // Rush: when opponent's turn next starts, halve their timer alarm.
-    // The startTimer effect handler reads the rush effect and applies it.
-
-    // Wildfire / Blind / Peek / Blitz / Letter Bomb / Shrink / Freeze / Second Life / Swap (pending)
-    // are all just effects on the activeEffects array — handled in handleWordSubmission and
-    // applyEffects/startTimer. The broadcast below is enough.
     this.broadcastAll(
       JSON.stringify({
         type: "power_up_activated",
@@ -659,85 +556,6 @@ export class GameRoom implements DurableObject {
 
     await this.saveRoom(stored);
     await this.applyEffects([{ type: "broadcastState" }], stored);
-  }
-
-  private async handleSwapChooseLetter(
-    ws: WebSocket,
-    playerId: string,
-    letter: string
-  ): Promise<void> {
-    const stored = await this.loadRoom();
-    if (!stored.matchState || stored.matchState.status !== "round_active") return;
-    const round = stored.matchState.currentRound;
-    if (!round) return;
-
-    if (round.currentPlayerId !== playerId) {
-      ws.send(JSON.stringify({ type: "error", message: "Not your turn" }));
-      return;
-    }
-
-    const consumption = consumeSwapPending(round.activeEffects, playerId);
-    if (!consumption.wasPending) {
-      ws.send(JSON.stringify({ type: "error", message: "No pending swap" }));
-      return;
-    }
-
-    const lower = letter.trim().toLowerCase();
-    if (!/^[a-z]$/.test(lower)) {
-      ws.send(JSON.stringify({ type: "error", message: "Invalid letter" }));
-      return;
-    }
-
-    // Set new seed letter and end the activator's turn (advance to opponent).
-    const opponentId =
-      playerId === stored.matchState.player1Id
-        ? stored.matchState.player2Id
-        : stored.matchState.player1Id;
-
-    if (stored.matchState.currentRound) {
-      stored.matchState.currentRound.seedLetter = lower;
-      stored.matchState.currentRound.currentPlayerId = opponentId;
-      stored.matchState.currentRound.activeEffects = consumption.activeEffects;
-    }
-
-    this.broadcastAll(
-      JSON.stringify({
-        type: "swap_letter_chosen",
-        byPlayerId: playerId,
-        letter: lower,
-      })
-    );
-
-    await this.saveRoom(stored);
-    await this.applyEffects(
-      [{ type: "broadcastState" }, { type: "stopTimer" }, { type: "startTimer" }],
-      stored
-    );
-  }
-
-  private async handleTypingUpdate(playerId: string, partial: string): Promise<void> {
-    const stored = await this.loadRoom();
-    if (!stored.matchState || stored.matchState.status !== "round_active") return;
-    const round = stored.matchState.currentRound;
-    if (!round) return;
-    if (round.currentPlayerId !== playerId) return;
-
-    const opponentId =
-      playerId === stored.matchState.player1Id
-        ? stored.matchState.player2Id
-        : stored.matchState.player1Id;
-
-    // Relay only if opponent has Peek active.
-    if (!isPeekActive(round.activeEffects, opponentId)) return;
-
-    this.broadcastToPlayer(
-      opponentId,
-      JSON.stringify({
-        type: "typing_update",
-        fromPlayerId: playerId,
-        partial: partial.slice(0, 30), // cap to avoid abuse
-      })
-    );
   }
 
   async webSocketClose(ws: WebSocket): Promise<void> {
@@ -824,23 +642,35 @@ export class GameRoom implements DurableObject {
     const round = stored.matchState.currentRound;
     const timedOutPlayerId = round.currentPlayerId;
 
-    const slCheck = consumeSecondLifeOnTimeout(round.activeEffects, timedOutPlayerId);
-    if (slCheck.consumed) {
-      round.activeEffects = slCheck.activeEffects;
+    // Second Life — auto-activates on timeout if player has one in inventory.
+    const inventory = round.powerUpInventory[timedOutPlayerId];
+    if ((inventory?.secondLife ?? 0) > 0) {
+      round.powerUpInventory[timedOutPlayerId] = {
+        ...inventory!,
+        secondLife: inventory!.secondLife - 1,
+      };
       this.broadcastAll(
         JSON.stringify({
           type: "second_life_consumed",
           playerId: timedOutPlayerId,
         })
       );
-      const result = transition(stored.matchState, {
+      const inDZ =
+        this.dangerZoneEnabled &&
+        round.chain.length >= DANGER_ZONE_CHAIN_THRESHOLD;
+      const modeConfig = getModeConfig(stored.matchState.gameMode);
+      const resetMs = inDZ ? DANGER_ZONE_TIMER_MS : modeConfig.turnTimeoutMs;
+      stored.turnStartAt = Date.now();
+      await this.saveRoom(stored);
+      await this.state.storage.setAlarm(Date.now() + resetMs);
+      const slResult = transition(stored.matchState, {
         type: "turnTimeout",
         playerId: timedOutPlayerId,
         secondLifeConsumed: true,
       });
-      stored.matchState = result.state;
+      stored.matchState = slResult.state;
       await this.saveRoom(stored);
-      await this.applyEffects(result.effects, stored);
+      await this.applyEffects(slResult.effects, stored);
       return;
     }
 
@@ -912,16 +742,19 @@ export class GameRoom implements DurableObject {
       breakdown: scoreResult.breakdown,
     });
 
+    const opponentId = botId === state.player1Id ? state.player2Id : state.player1Id;
     const prevRoundScore = round.playerRoundScores[botId] ?? 0;
     const newRoundScore = prevRoundScore + scoreResult.points;
     const evalResult = evaluateDrops({
       playerId: botId,
+      opponentId,
+      word,
+      scoreResult,
       prevRoundScore,
       newRoundScore,
-      breakdown: scoreResult.breakdown,
       triggers: round.dropTriggers,
-      chainLength: round.chain.length + 1,
       isDangerZone: false,
+      justEnteredDangerZone: false,
     });
 
     const wordResult = transition(state, {
@@ -955,7 +788,6 @@ export class GameRoom implements DurableObject {
           type: "power_up_earned",
           playerId: drop.playerId,
           powerup: drop.id,
-          source: drop.source,
         })
       );
     }
@@ -1012,37 +844,21 @@ export class GameRoom implements DurableObject {
           this.broadcastStateAll(stored);
           break;
         case "startTimer": {
-          const mode = getModeConfig(stored.matchState?.gameMode ?? "classic");
+          const mode = getModeConfig(stored.matchState?.gameMode ?? "duel");
           const round = stored.matchState?.currentRound;
-          // Bot turn: skip the full turn timer, schedule a short bot-move delay instead.
+          // Bot turn: schedule a short bot-move delay instead of the full timer.
           if (stored.botPlayerId && round?.currentPlayerId === stored.botPlayerId) {
             const delay = 2500 + Math.floor(Math.random() * 2000);
-            await this.setAlarm(stored, "bot_turn", Date.now() + delay);
             stored.turnStartAt = Date.now();
+            await this.setAlarm(stored, "bot_turn", Date.now() + delay);
             break;
           }
           const inDangerZone =
             this.dangerZoneEnabled &&
             (round?.chain.length ?? 0) >= DANGER_ZONE_CHAIN_THRESHOLD;
-          let timeoutMs = inDangerZone ? DANGER_ZONE_TIMER_MS : mode.turnTimeoutMs;
-          if (round) {
-            // Freeze: cuts FREEZE_DURATION_MS off the affected player's turn.
-            const freezeIdx = round.activeEffects.findIndex(
-              (e) => e.kind === "freeze" && e.onPlayerId === round.currentPlayerId
-            );
-            if (freezeIdx >= 0) {
-              timeoutMs = Math.max(2_000, timeoutMs - FREEZE_DURATION_MS);
-              round.activeEffects = round.activeEffects.filter((_, i) => i !== freezeIdx);
-            }
-            // Rush: halves the affected player's turn.
-            const rush = consumeRush(round.activeEffects, round.currentPlayerId);
-            if (rush.consumed) {
-              timeoutMs = Math.max(2_000, Math.floor(timeoutMs * RUSH_TIMER_FRACTION));
-              round.activeEffects = rush.activeEffects;
-            }
-          }
-          await this.setAlarm(stored, "turn", Date.now() + timeoutMs);
+          const timeoutMs = inDangerZone ? DANGER_ZONE_TIMER_MS : mode.turnTimeoutMs;
           stored.turnStartAt = Date.now();
+          await this.setAlarm(stored, "turn", Date.now() + timeoutMs);
           break;
         }
         case "stopTimer":
@@ -1059,7 +875,6 @@ export class GameRoom implements DurableObject {
           }
           break;
         case "matchOver":
-          // Skip persistence for bot matches — bot has no DB record and no ELO.
           if (!stored.botPlayerId) {
             await persistMatch(this.env, {
               player1Id: stored.playerIds[0] ?? "",
@@ -1067,7 +882,7 @@ export class GameRoom implements DurableObject {
               winnerId: effect.winnerId,
               roundWins: stored.matchState?.roundWins ?? {},
               roundHistory: stored.roundHistory,
-              gameMode: stored.matchState?.gameMode ?? "classic",
+              gameMode: stored.matchState?.gameMode ?? "duel",
             });
           }
           break;
@@ -1097,8 +912,6 @@ export class GameRoom implements DurableObject {
     }
   }
 
-  // Broadcasts the current state — but redacts the chain for any player
-  // who has Blind active on them.
   private broadcastStateAll(stored: RoomStorage): void {
     for (const ws of this.state.getWebSockets()) {
       const tag = this.state.getTags(ws)[0];
@@ -1112,22 +925,12 @@ export class GameRoom implements DurableObject {
     playerId: string,
     stored: RoomStorage
   ): void {
-    let state = stored.matchState;
-    if (state?.currentRound && isBlinded(state.currentRound.activeEffects, playerId)) {
-      // Redact: hide the chain entries from the blinded player.
-      state = {
-        ...state,
-        currentRound: {
-          ...state.currentRound,
-          chain: state.currentRound.chain.map(() => "•••"),
-        },
-      };
-    }
+    void playerId;
     try {
       ws.send(
         JSON.stringify({
           type: "state_update",
-          state,
+          state: stored.matchState,
           scores: stored.scores,
           roundHistory: stored.roundHistory,
           turnStartAt: stored.turnStartAt,

@@ -20,24 +20,17 @@ interface BeforeInstallPromptEvent extends Event {
 // ── Backend types (mirrored from src/modules/MatchStateMachine.ts) ───────────
 
 type PowerUpInventory = Record<PowerUpId, number>
-type GameMode = 'classic' | 'speed_round'
+type GameMode = 'duel' | 'classic'
 
 type ActiveEffect =
-  | { kind: 'freeze'; onPlayerId: string; expiresAt: number }
-  | { kind: 'secondLifeArmed'; forPlayerId: string }
   | { kind: 'letterBomb'; onPlayerId: string; requiredLetter: string }
-  | { kind: 'swapPending'; byPlayerId: string }
-  | { kind: 'blind'; onPlayerId: string; turnsRemaining: number }
-  | { kind: 'shrink'; onPlayerId: string; maxLength: number }
-  | { kind: 'rush'; onPlayerId: string }
-  | { kind: 'peek'; forPlayerId: string; turnsRemaining: number }
-  | { kind: 'blitzClaimed'; byPlayerId: string }
-  | { kind: 'wildfire'; turnsRemaining: number; multiplier: number }
+  | { kind: 'doubleScore'; forPlayerId: string; wordsRemaining: number }
+  | { kind: 'wildPending'; forPlayerId: string }
+  | { kind: 'anchor'; onPlayerId: string; minLength: number }
 
 interface DropTriggers {
-  thresholdsCrossed: Record<string, number>
-  rareLetterDropped: Record<string, boolean>
-  longWordDropped: Record<string, boolean>
+  playerFreezeThresholds: Record<string, number>
+  playerWordCounts: Record<string, number>
 }
 
 interface RoundState {
@@ -45,7 +38,6 @@ interface RoundState {
   seedLetter: string
   chain: string[]
   currentPlayerId: string
-  faults: Record<string, number>
   roundWinnerId?: string
   playerRoundScores: Record<string, number>
   powerUpInventory: Record<string, PowerUpInventory>
@@ -74,7 +66,7 @@ interface WordEntry {
   word: string
   playerId: string
   points: number
-  breakdown: { base: number; rareLetter: number; longWord: number }
+  breakdown: { base: number; rareTier1: number; rareTier2: number; rareTier3: number; longWord: number }
 }
 
 interface RoundHistoryEntry {
@@ -86,18 +78,16 @@ interface RoundHistoryEntry {
 type ServerMsg =
   | { type: 'state_update'; state: MatchState; scores: Record<string, number>; roundHistory: RoundHistoryEntry[]; turnStartAt?: number; serverNow?: number }
   | { type: 'waiting'; playerCount: number; mode?: GameMode }
-  | { type: 'word_result'; valid: true; points: number; breakdown: { base: number; rareLetter: number; longWord: number }; multiplier?: number }
+  | { type: 'word_result'; valid: true; points: number; breakdown: { base: number; rareTier1: number; rareTier2: number; rareTier3: number; longWord: number }; multiplier?: number }
   | { type: 'word_result'; valid: false; reason: string }
   | { type: 'opponent_disconnected' }
   | { type: 'rematch_pending' }
   | { type: 'rematch_timeout' }
-  | { type: 'power_up_earned'; playerId: string; powerup: PowerUpId; source: string }
+  | { type: 'power_up_earned'; playerId: string; powerup: PowerUpId }
   | { type: 'danger_zone_entered' }
-  | { type: 'power_up_activated'; powerup: PowerUpId; byPlayerId: string; targetPlayerId: string | null; word?: string; points?: number }
+  | { type: 'power_up_activated'; powerup: PowerUpId; byPlayerId: string; targetPlayerId: string | null; effect?: ActiveEffect | null }
   | { type: 'second_life_consumed'; playerId: string }
   | { type: 'reaction'; fromPlayerId: string; reaction: string }
-  | { type: 'swap_letter_chosen'; byPlayerId: string; letter: string }
-  | { type: 'typing_update'; fromPlayerId: string; partial: string }
   | { type: 'forfeit'; absentPlayerId: string }
   | { type: 'error'; message: string }
 
@@ -105,9 +95,9 @@ type ServerMsg =
 
 const NEXT_ROUND_SECONDS = 30
 
-const MODE_CONFIG: Record<GameMode, { displayName: string; turnSeconds: number; maxFaults: number }> = {
-  classic: { displayName: 'Classic Duel', turnSeconds: 20, maxFaults: 8 },
-  speed_round: { displayName: 'Speed Round', turnSeconds: 8, maxFaults: 1 },
+const MODE_CONFIG: Record<GameMode, { displayName: string; turnSeconds: number }> = {
+  duel: { displayName: 'Duel', turnSeconds: 25 },
+  classic: { displayName: 'Classic', turnSeconds: 8 },
 }
 
 const REACTION_OPTIONS: Array<{ key: string; emoji: string }> = [
@@ -191,7 +181,7 @@ function GameContent() {
   const [submitting, setSubmitting] = useState(false)
   const [floats, setFloats] = useState<Array<{ id: number; text: string; ok: boolean; byMe: boolean }>>([])
   const floatIdRef = useRef(0)
-  const [timeLeft, setTimeLeft] = useState(60)
+  const [timeLeft, setTimeLeft] = useState(0)
   const [nextRoundTimeLeft, setNextRoundTimeLeft] = useState(NEXT_ROUND_SECONDS)
   const [roundHistory, setRoundHistory] = useState<RoundHistoryEntry[]>([])
   const [gameScores, setGameScores] = useState<Record<string, number>>({})
@@ -202,11 +192,10 @@ function GameContent() {
   const [oppHighlights, setOppHighlights] = useState<Partial<Record<PowerUpId, 'earned' | 'activated'>>>({})
   const [reactionFeed, setReactionFeed] = useState<Array<{ id: number; emoji: string; byMe: boolean }>>([])
   const [forfeitedBy, setForfeitedBy] = useState<string | null>(null)
-  const [opponentTyping, setOpponentTyping] = useState<string>('')
 
   const [isMobile, setIsMobile] = useState(false)
   const [keyboardVisible, setKeyboardVisible] = useState(true)
-  const [activeToast, setActiveToast] = useState<{ id: number; variant: ToastVariant; subText?: string } | null>(null)
+  const [activeToast, setActiveToast] = useState<{ id: number; variant: ToastVariant; subText?: string; title?: string } | null>(null)
   const toastIdRef = useRef(0)
   const [powerNotifs, setPowerNotifs] = useState<Array<{ id: number; emoji: string; title: string; desc: string; byMe: boolean }>>([])
   const notifIdRef = useRef(0)
@@ -375,22 +364,6 @@ function GameContent() {
         return
       }
 
-      if (msg.type === 'typing_update') {
-        setOpponentTyping(msg.partial)
-        return
-      }
-
-      if (msg.type === 'swap_letter_chosen') {
-        const isMe = msg.byPlayerId === myId
-        const swapLabel = POWER_UP_LABELS.swap
-        const swapDesc = isMe ? (POWER_DESC.swap?.own ?? '') : (POWER_DESC.swap?.opp ?? '')
-        const swapId = ++notifIdRef.current
-        setPowerNotifs(prev => [...prev, { id: swapId, emoji: swapLabel.emoji, title: `${isMe ? 'You' : 'Opponent'} activated ${swapLabel.name}`, desc: swapDesc, byMe: isMe }])
-        setTimeout(() => setPowerNotifs(prev => prev.filter(n => n.id !== swapId)), 2500)
-        playRef.current(isMe ? 'power_used_me' : 'power_used_opp')
-        return
-      }
-
       if (msg.type === 'state_update') {
         const { state } = msg
         const prev = prevStateRef.current
@@ -410,9 +383,6 @@ function GameContent() {
           const chainGrew = newRound.chain.length > (prevRound?.chain.length ?? -1)
           const roundChanged = newRound.roundNumber !== prevRound?.roundNumber
           const firstUpdate = !prevRound
-          // Use server-authoritative turnStartAt when available so the timer
-          // survives a page refresh without resetting to full. The serverNow
-          // field lets us compensate for clock skew between server and client.
           if (msg.turnStartAt != null && msg.serverNow != null) {
             const serverElapsed = msg.serverNow - msg.turnStartAt
             turnStartAtRef.current = Date.now() - serverElapsed
@@ -448,7 +418,7 @@ function GameContent() {
   // Visual countdown ticker — updates every 250 ms
   useEffect(() => {
     if (matchState?.status !== 'round_active') return
-    const mode = matchState.gameMode ?? 'classic'
+    const mode = matchState.gameMode ?? 'duel'
     const turnSecs = MODE_CONFIG[mode].turnSeconds
     const id = setInterval(() => {
       setTimeLeft(Math.max(0, turnSecs - (Date.now() - turnStartAtRef.current) / 1000))
@@ -495,7 +465,7 @@ function GameContent() {
     prevStatusRef.current = s
   }, [matchState?.status, matchState?.matchWinnerId, myId])
 
-  // Sound: time warn — 3s in Danger Zone (short timer), 5s in normal play (20s timer)
+  // Sound: time warn
   const timeWarnFiredRef = useRef(false)
   useEffect(() => {
     if (matchState?.status !== 'round_active') { timeWarnFiredRef.current = false; return }
@@ -503,7 +473,7 @@ function GameContent() {
     if (timeLeft <= warnAt && !timeWarnFiredRef.current) {
       timeWarnFiredRef.current = true
       playRef.current('time_warn')
-      setActiveToast({ id: ++toastIdRef.current, variant: 'time_warn' })
+      setActiveToast({ id: ++toastIdRef.current, variant: 'time_warn', title: `${warnAt} seconds left!` })
     }
     if (timeLeft > warnAt) timeWarnFiredRef.current = false
   }, [timeLeft, matchState?.status])
@@ -517,13 +487,7 @@ function GameContent() {
 
   const handleGameKey = useCallback((key: string) => {
     if (key === 'ENTER') { submitWord(); return }
-    setWordInput(prev => {
-      const next = key === 'BACKSPACE' ? prev.slice(0, -1) : prev + key.toLowerCase()
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: 'typing_update', partial: next }))
-      }
-      return next
-    })
+    setWordInput(prev => key === 'BACKSPACE' ? prev.slice(0, -1) : prev + key.toLowerCase())
   }, [submitWord])
 
   const sendNextRoundRequest = useCallback(() => {
@@ -706,7 +670,7 @@ function GameContent() {
                             variant={entry.playerId === myId ? 'player1' : 'player2'}
                             size="sm"
                           />
-                          {entry.breakdown.rareLetter > 0 && (
+                          {(entry.breakdown.rareTier1 + entry.breakdown.rareTier2 + entry.breakdown.rareTier3) > 0 && (
                             <Badge variant="rare" size="xs">rare</Badge>
                           )}
                           {entry.breakdown.longWord > 0 && (
@@ -799,7 +763,7 @@ function GameContent() {
           <p style={{ fontFamily: 'var(--font-display)', fontSize: '22px', color: 'var(--n900)', marginBottom: '4px' }}>
             {iWonRound ? 'You won the round!' : 'Opponent won the round'}
           </p>
-          {/* 5-round progress dots */}
+          {/* Round progress dots */}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: '20px' }}>
             {[1, 2, 3, 4, 5].map(r => {
               const myWon = r <= myWins
@@ -846,16 +810,12 @@ function GameContent() {
   const opponentName = opponentId === 'bot' ? 'Bot' : 'Opponent'
   const myWins = matchState.roundWins[myId] ?? 0
   const oppWins = matchState.roundWins[opponentId] ?? 0
-  const myFaults = round.faults[myId] ?? 0
-  const oppFaults = round.faults[opponentId] ?? 0
-  const gameMode: GameMode = matchState.gameMode ?? 'classic'
+  const gameMode: GameMode = matchState.gameMode ?? 'duel'
   const modeCfg = MODE_CONFIG[gameMode]
-  const emptyInv: PowerUpInventory = { freeze: 0, secondLife: 0, letterBomb: 0, block: 0, swap: 0, blind: 0, shrink: 0, rush: 0, steal: 0, peek: 0, blitz: 0, wildfire: 0 }
+  const emptyInv: PowerUpInventory = { freeze: 0, secondLife: 0, letterBomb: 0, double: 0, wild: 0, anchor: 0, tax: 0 }
   const myInventory: PowerUpInventory = round.powerUpInventory[myId] ?? emptyInv
   const opponentInventory: PowerUpInventory = round.powerUpInventory[opponentId] ?? emptyInv
-  const blindOnMe = round.activeEffects.find(e => e.kind === 'blind' && e.onPlayerId === myId)
-  const swapPending = round.activeEffects.find(e => e.kind === 'swapPending' && e.byPlayerId === myId)
-  const inDangerZone = round.chain.length >= 12
+  const inDangerZone = round.chain.length >= 16
   inDangerZoneRef.current = inDangerZone
   const timerPct = (timeLeft / modeCfg.turnSeconds) * 100
   const timerUrgent = timeLeft <= 5 || inDangerZone
@@ -867,25 +827,23 @@ function GameContent() {
   const myGameScore = gameScores[myId] ?? 0
   const oppGameScore = gameScores[opponentId] ?? 0
 
+  // Score gap display for Duel mode
+  const scoreGap = myRoundScore - oppRoundScore
+  const showScoreGap = gameMode === 'duel' && (myRoundScore > 0 || oppRoundScore > 0)
+
   const oppEffectChips: string[] = round.activeEffects.flatMap(e => {
-    if (e.kind === 'letterBomb' && e.onPlayerId === opponentId) return [`💣 ${e.requiredLetter}`]
-    if (e.kind === 'shrink'     && e.onPlayerId === opponentId) return [`🤏 ≤${e.maxLength}`]
-    if (e.kind === 'rush'       && e.onPlayerId === opponentId) return ['⚡ Rush']
-    if (e.kind === 'blind'      && e.onPlayerId === opponentId) return [`🙈 ${e.turnsRemaining}T`]
-    if (e.kind === 'freeze'     && e.onPlayerId === opponentId) return ['❄️ Frozen']
+    if (e.kind === 'letterBomb'  && e.onPlayerId === opponentId) return [`💣 ${e.requiredLetter}`]
+    if (e.kind === 'anchor'      && e.onPlayerId === opponentId) return [`⚓ ≥${e.minLength}`]
+    if (e.kind === 'doubleScore' && e.forPlayerId === opponentId) return [`🎯 ${e.wordsRemaining}W`]
+    if (e.kind === 'wildPending' && e.forPlayerId === opponentId) return ['🃏 Wild']
     return []
   })
 
   const myEffectChips: string[] = round.activeEffects.flatMap(e => {
-    if (e.kind === 'letterBomb'    && e.onPlayerId === myId)    return [`💣 ${e.requiredLetter}`]
-    if (e.kind === 'shrink'        && e.onPlayerId === myId)    return [`🤏 ≤${e.maxLength}`]
-    if (e.kind === 'rush'          && e.onPlayerId === myId)    return ['⚡ Rush']
-    if (e.kind === 'blind'         && e.onPlayerId === myId)    return ['🙈 Hidden']
-    if (e.kind === 'freeze'        && e.onPlayerId === myId)    return ['❄️ Frozen']
-    if (e.kind === 'secondLifeArmed' && e.forPlayerId === myId) return ['💚 Armed']
-    if (e.kind === 'peek'          && e.forPlayerId === myId)   return [`👁 ${opponentTyping || '…'}`]
-    if (e.kind === 'blitzClaimed'  && e.byPlayerId === myId)    return ['⚔️ Blitz x2']
-    if (e.kind === 'wildfire')                                  return [`🔥 3×·${e.turnsRemaining}T`]
+    if (e.kind === 'letterBomb'  && e.onPlayerId === myId)    return [`💣 ${e.requiredLetter}`]
+    if (e.kind === 'anchor'      && e.onPlayerId === myId)    return [`⚓ ≥${e.minLength}`]
+    if (e.kind === 'doubleScore' && e.forPlayerId === myId)   return [`🎯 ${e.wordsRemaining}W`]
+    if (e.kind === 'wildPending' && e.forPlayerId === myId)   return ['🃏 Wild']
     return []
   })
 
@@ -917,7 +875,7 @@ function GameContent() {
       {/* Danger Zone strip */}
       {inDangerZone && (
         <div style={{ background: 'var(--danger-zone-bg)', borderBottom: '1px solid var(--danger-zone)', padding: '6px 14px', fontSize: '11px', color: 'var(--danger-zone)', textAlign: 'center', flexShrink: 0, fontWeight: 700, letterSpacing: '0.04em' }}>
-          DANGER ZONE — 3× scoring · 10s timer
+          DANGER ZONE — 2× scoring · 10s timer
         </div>
       )}
 
@@ -940,6 +898,7 @@ function GameContent() {
                 key={activeToast.id}
                 variant={activeToast.variant}
                 subText={activeToast.subText}
+                title={activeToast.title}
                 onDismiss={() => setActiveToast(null)}
               />
             </div>
@@ -975,13 +934,25 @@ function GameContent() {
         <div style={{ textAlign: 'center', flexShrink: 0 }}>
           <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--n800)', lineHeight: 1 }}>{myWins} – {oppWins}</div>
           <div style={{ fontSize: 9, color: 'var(--n400)', letterSpacing: '0.06em', fontWeight: 600, marginTop: 2 }}>ROUNDS</div>
+          {/* Score gap indicator — Duel mode */}
+          {showScoreGap && (
+            <div style={{
+              fontSize: 9,
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 700,
+              marginTop: 3,
+              color: scoreGap > 0 ? 'var(--p1)' : scoreGap < 0 ? 'var(--p2)' : 'var(--n400)',
+            }}>
+              {scoreGap > 0 ? `↑${scoreGap}` : scoreGap < 0 ? `↓${Math.abs(scoreGap)}` : '–'}
+            </div>
+          )}
         </div>
 
         {/* Opponent */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1, justifyContent: 'flex-end', minWidth: 0 }}>
           <div style={{ minWidth: 0, flex: 1, textAlign: 'right' }}>
             <p style={{ fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n800)', margin: '0 0 2px' }}>
-              {!isMyTurn && <span style={{ color: 'var(--p2)', fontWeight: 500 }}>{opponentTyping ? 'typing… · ' : 'thinking… · '}</span>}{opponentName}
+              {!isMyTurn && <span style={{ color: 'var(--p2)', fontWeight: 500 }}>thinking… · </span>}{opponentName}
             </p>
             <div style={{ margin: '0 0 3px', textAlign: 'right' }}>
               <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--p2)' }}>{oppRoundScore}</span>
@@ -1037,14 +1008,8 @@ function GameContent() {
       </div>
 
       {/* ── Word chain + floating reaction FAB ── */}
-      <div style={{ flex: 1, padding: `12px 16px ${gameMode === 'classic' ? 52 : 12}px`, display: 'flex', flexWrap: 'wrap', gap: 6, alignContent: 'flex-start', overflow: 'hidden', position: 'relative' }}>
-        {blindOnMe && blindOnMe.kind === 'blind' ? (
-          <div style={{ width: '100%', textAlign: 'center', color: 'var(--n400)', paddingTop: 20 }}>
-            <div style={{ fontSize: 28, marginBottom: 4 }}>🙈</div>
-            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>Chain hidden</div>
-            <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)' }}>{(blindOnMe as { kind: 'blind'; onPlayerId: string; turnsRemaining: number }).turnsRemaining}T left</div>
-          </div>
-        ) : round.chain.length === 0 ? (
+      <div style={{ flex: 1, padding: `12px 16px ${gameMode === 'duel' ? 52 : 12}px`, display: 'flex', flexWrap: 'wrap', gap: 6, alignContent: 'flex-start', overflow: 'hidden', position: 'relative' }}>
+        {round.chain.length === 0 ? (
           <div style={{ width: '100%', textAlign: 'center', paddingTop: 20 }}>
             <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--n400)', marginBottom: 6 }}>Start with</div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, color: 'var(--n900)' }}>{round.seedLetter.toUpperCase()}</div>
@@ -1060,14 +1025,14 @@ function GameContent() {
             })}
             {!isMyTurn && (
               <span style={{ fontSize: 12, color: 'var(--n400)', fontFamily: 'var(--font-mono)', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', background: 'var(--n100)', borderRadius: 'var(--radius-full)', border: '1px dashed var(--n300)' }}>
-                {opponentTyping || nextSeed.toLowerCase()}<span style={{ animation: 'blink 1s step-end infinite', opacity: 0.5 }}>|</span>
+                {nextSeed.toLowerCase()}<span style={{ animation: 'blink 1s step-end infinite', opacity: 0.5 }}>|</span>
               </span>
             )}
           </>
         )}
 
-        {/* Floating reaction FAB — sits above the powers strip */}
-        <div style={{ position: 'absolute', bottom: gameMode === 'classic' ? 58 : 10, right: 14, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+        {/* Floating reaction FAB */}
+        <div style={{ position: 'absolute', bottom: gameMode === 'duel' ? 58 : 10, right: 14, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
           {reactionsOpen && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, background: 'var(--n0)', border: '1px solid var(--n200)', borderRadius: 'var(--radius-xl)', padding: '6px 4px', boxShadow: '0 4px 16px rgba(0,0,0,0.10)' }}>
               {REACTION_OPTIONS.map(r => (
@@ -1084,13 +1049,14 @@ function GameContent() {
           </button>
         </div>
 
-        {/* Powers strip — classic mode, always visible at bottom of chain area */}
-        {gameMode === 'classic' && (
+        {/* Powers strip — duel mode, always visible at bottom of chain area */}
+        {gameMode === 'duel' && (
           <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'var(--n0)', borderTop: '1px solid var(--n100)', padding: '6px 10px', display: 'flex', gap: 4, alignItems: 'center', overflowX: 'auto', msOverflowStyle: 'none' } as React.CSSProperties}>
             {(Object.keys(POWER_UP_LABELS) as PowerUpId[]).map(id => {
               const count = myInventory[id] ?? 0
               const earned = count > 0
-              const turnLocked = !isMyTurn && id !== 'secondLife' && id !== 'block'
+              // secondLife and freeze can be used anytime (affect your own timer); all others require your turn
+              const turnLocked = !isMyTurn && id !== 'secondLife' && id !== 'freeze'
               const hl = myHighlights[id]
               return (
                 <PowerUpTooltip key={id} id={id} description={POWER_DESC[id].own}>
@@ -1153,7 +1119,6 @@ function GameContent() {
           <TimerBar percent={timerPct} danger={timerUrgent} label={`${Math.ceil(timeLeft)}s`} />
         </div>
 
-
         {/* Turn label + word count */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
           {isMyTurn ? (
@@ -1166,32 +1131,13 @@ function GameContent() {
           <span style={{ fontSize: 11, color: 'var(--n400)', fontFamily: 'var(--font-mono)' }}>{round.chain.length} words</span>
         </div>
 
-        {/* Swap letter picker */}
-        {swapPending && (
-          <div style={{ marginBottom: 8 }}>
-            <div style={{ fontSize: 11, color: 'var(--n700)', marginBottom: 4, fontWeight: 600 }}>🔀 Pick new chain letter:</div>
-            <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-              {'abcdefghijklmnopqrstuvwxyz'.split('').map(letter => (
-                <button key={letter} onClick={() => { if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify({ type: 'swap_choose_letter', letter })) }}
-                  style={{ width: 24, height: 24, borderRadius: 'var(--radius-sm)', border: '1px solid var(--n200)', background: 'var(--n0)', fontFamily: 'var(--font-mono)', fontSize: 11, cursor: 'pointer', textTransform: 'uppercase' }}>{letter}</button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Input row */}
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <input
             ref={inputRef}
             type="text"
             value={wordInput}
-            onChange={e => {
-              const v = e.target.value
-              setWordInput(v)
-              if (wsRef.current?.readyState === WebSocket.OPEN && isMyTurn) {
-                wsRef.current.send(JSON.stringify({ type: 'typing_update', partial: v }))
-              }
-            }}
+            onChange={e => setWordInput(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter') { submitWord(); return }
               if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key.length === 1 || e.key === 'Backspace')) play('tap')

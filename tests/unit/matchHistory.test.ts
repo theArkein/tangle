@@ -51,8 +51,8 @@ describe("persistMatch", () => {
           roundNumber: 1,
           winnerId: "pm-p1",
           words: [
-            { word: "apple", playerId: "pm-p1", points: 5, breakdown: { base: 5, rareLetter: 0, longWord: 0 } },
-            { word: "eat",   playerId: "pm-p2", points: 3, breakdown: { base: 3, rareLetter: 0, longWord: 0 } },
+            { word: "apple", playerId: "pm-p1", points: 5, breakdown: { base: 5, rareTier1: 0, rareTier2: 0, rareTier3: 0, longWord: 0 } },
+            { word: "eat",   playerId: "pm-p2", points: 3, breakdown: { base: 3, rareTier1: 0, rareTier2: 0, rareTier3: 0, longWord: 0 } },
           ],
         },
       ],
