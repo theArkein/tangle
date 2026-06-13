@@ -45,7 +45,7 @@ export interface MatchState {
 }
 
 export type MatchEvent =
-  | { type: "start"; player1Id: PlayerId; player2Id: PlayerId; seedLetter: string; gameMode?: GameMode }
+  | { type: "start"; player1Id: PlayerId; player2Id: PlayerId; seedLetter: string; gameMode?: GameMode; firstPlayerId?: PlayerId }
   | { type: "wordSubmitted"; playerId: PlayerId; word: string; points: number }
   | { type: "invalidWord"; playerId: PlayerId }
   | { type: "turnTimeout"; playerId: PlayerId; secondLifeConsumed?: boolean }
@@ -180,7 +180,7 @@ export function transition(state: MatchState, event: MatchEvent): TransitionResu
       const round = freshRound(
         1,
         event.seedLetter,
-        event.player1Id,
+        event.firstPlayerId ?? event.player1Id,
         event.player1Id,
         event.player2Id
       );

@@ -209,12 +209,19 @@ export class GameRoom implements DurableObject {
       gameMode: mode,
     };
 
+    // In bot matches, randomize who takes the opening turn so the human
+    // doesn't always start. PvP keeps player1 as the opener.
+    const firstPlayerId = stored.botPlayerId
+      ? (Math.random() < 0.5 ? p1 : p2)
+      : p1;
+
     const result = transition(waitingState, {
       type: "start",
       player1Id: p1,
       player2Id: p2,
       seedLetter,
       gameMode: mode,
+      firstPlayerId,
     });
 
     stored.matchState = result.state;
