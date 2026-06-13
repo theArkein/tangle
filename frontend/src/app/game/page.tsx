@@ -76,7 +76,7 @@ interface RoundHistoryEntry {
 }
 
 type ServerMsg =
-  | { type: 'state_update'; state: MatchState; scores: Record<string, number>; roundHistory: RoundHistoryEntry[]; turnStartAt?: number; serverNow?: number; dangerZoneEnabled?: boolean }
+  | { type: 'state_update'; state: MatchState; scores: Record<string, number>; roundHistory: RoundHistoryEntry[]; turnStartAt?: number; serverNow?: number; dangerZoneEnabled?: boolean; playerNames?: Record<string, string> }
   | { type: 'waiting'; playerCount: number; mode?: GameMode }
   | { type: 'word_result'; valid: true; points: number; breakdown: { base: number; rareTier1: number; rareTier2: number; rareTier3: number; longWord: number }; multiplier?: number }
   | { type: 'word_result'; valid: false; reason: string }
@@ -340,6 +340,7 @@ function GameContent() {
   const [nextRoundTimeLeft, setNextRoundTimeLeft] = useState(NEXT_ROUND_SECONDS)
   const [roundHistory, setRoundHistory] = useState<RoundHistoryEntry[]>([])
   const [gameScores, setGameScores] = useState<Record<string, number>>({})
+  const [playerNames, setPlayerNames] = useState<Record<string, string>>({})
   const [rematchState, setRematchState] = useState<'idle' | 'pending'>('idle')
   const [dangerZoneEnabled, setDangerZoneEnabled] = useState(false)
   const [showLinkPrompt, setShowLinkPrompt] = useState(false)
@@ -394,6 +395,7 @@ function GameContent() {
       },
     })
     setGameScores({ [P1]: 1, [P2]: 0 })
+    setPlayerNames({ [P1]: 'Sarad', [P2]: 'Rival' })
     setDangerZoneEnabled(true)
   }, [roomId, devMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -614,6 +616,7 @@ function GameContent() {
         setMatchState(state)
         setSubmitting(false)
         if (msg.dangerZoneEnabled != null) setDangerZoneEnabled(msg.dangerZoneEnabled)
+        if (msg.playerNames) setPlayerNames(msg.playerNames)
         return
       }
     }
@@ -838,6 +841,8 @@ function GameContent() {
     const won = matchState.matchWinnerId === myId
     const opponentId = matchState.player1Id === myId ? matchState.player2Id : matchState.player1Id
     const isBotMatch = opponentId === 'bot'
+    const myName = (myId && playerNames[myId]) || 'You'
+    const opponentName = playerNames[opponentId] ?? (isBotMatch ? 'Bot' : 'Opponent')
 
     // For bot matches, skip the result screen — rematch fires automatically
     if (isBotMatch) {
@@ -859,14 +864,14 @@ function GameContent() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginTop: '14px' }}>
             <div style={{ textAlign: 'center' }}>
-              <Avatar name="You" variant="p1" size={38} />
+              <Avatar name={myName} variant="p1" size={38} />
               <div style={{ fontSize: '24px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--n900)', marginTop: '6px' }}>
                 {matchState.roundWins[myId] ?? 0}
               </div>
             </div>
             <span style={{ fontSize: '13px', color: 'var(--n300)', fontWeight: 500 }}>VS</span>
             <div style={{ textAlign: 'center' }}>
-              <Avatar name="?" variant="p2" size={38} />
+              <Avatar name={opponentName} variant="p2" size={38} />
               <div style={{ fontSize: '24px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--n400)', marginTop: '6px' }}>
                 {matchState.roundWins[opponentId] ?? 0}
               </div>
@@ -988,7 +993,8 @@ function GameContent() {
 
   const isMyTurn = matchState.status === 'round_active' && round.currentPlayerId === myId
   const opponentId = matchState.player1Id === myId ? matchState.player2Id : matchState.player1Id
-  const opponentName = opponentId === 'bot' ? 'Bot' : 'Opponent'
+  const opponentName = playerNames[opponentId] ?? (opponentId === 'bot' ? 'Bot' : 'Opponent')
+  const myName = (myId && playerNames[myId]) || 'You'
   const gameMode: GameMode = matchState.gameMode ?? 'duel'
   const modeCfg = MODE_CONFIG[gameMode]
   const emptyInv: PowerUpInventory = { extend: 0, secondLife: 0, letterBomb: 0, double: 0, wild: 0, anchor: 0, tax: 0 }
@@ -1085,7 +1091,7 @@ function GameContent() {
         {/* Me */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1, minWidth: 0, background: isMyTurn ? 'var(--p1-light)' : 'transparent', borderRadius: 'var(--radius-md)', padding: '4px 6px', transition: 'background 0.2s' }}>
           <div style={{ position: 'relative', flexShrink: 0, borderRadius: '50%', boxShadow: isMyTurn ? '0 0 0 2px var(--n0), 0 0 0 4px var(--p1)' : 'none', animation: isMyTurn ? 'turnPulseP1 1.6s ease-in-out infinite' : 'none', transition: 'box-shadow 0.2s' }}>
-            <Avatar name="You" variant="p1" size={30} />
+            <Avatar name={myName} variant="p1" size={30} />
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
             <p style={{ fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n800)', margin: '0 0 2px' }}>
@@ -1149,7 +1155,7 @@ function GameContent() {
             )}
           </div>
           <div style={{ position: 'relative', flexShrink: 0, borderRadius: '50%', boxShadow: !isMyTurn ? '0 0 0 2px var(--n0), 0 0 0 4px var(--p2)' : 'none', animation: !isMyTurn ? 'turnPulseP2 1.6s ease-in-out infinite' : 'none', transition: 'box-shadow 0.2s' }}>
-            <Avatar name="?" variant="p2" size={30} />
+            <Avatar name={opponentName} variant="p2" size={30} />
           </div>
         </div>
       </div>
@@ -1165,9 +1171,9 @@ function GameContent() {
                 <span
                   className="pwr-top"
                   data-float={`top-mine-${id}`}
-                  style={{ fontSize: 13, opacity: count > 0 ? 1 : 0.15, lineHeight: 1.2, position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 1, padding: '1px 2px', animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
+                  style={{ fontSize: 13, opacity: count > 0 ? 1 : 0.15, lineHeight: 1.2, position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '1px', animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
                   {POWER_UP_LABELS[id].emoji}
-                  {count > 0 && <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--p1)', fontWeight: 700, lineHeight: 1 }}>{count}</span>}
+                  {count > 0 && <span style={{ position: 'absolute', top: -3, right: -3, fontSize: 7, fontFamily: 'var(--font-mono)', background: 'var(--p1)', color: 'var(--n0)', borderRadius: '99px', padding: '0.5px 2.5px', fontWeight: 700, lineHeight: 1.4 }}>{count}</span>}
                 </span>
               </PowerUpTooltip>
             )
@@ -1183,9 +1189,9 @@ function GameContent() {
                 <span
                   className="pwr-top"
                   data-float={`opp-${id}`}
-                  style={{ fontSize: 13, opacity: count > 0 ? 1 : 0.15, lineHeight: 1.2, position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 1, padding: '1px 2px', animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
+                  style={{ fontSize: 13, opacity: count > 0 ? 1 : 0.15, lineHeight: 1.2, position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '1px', animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
                   {POWER_UP_LABELS[id].emoji}
-                  {count > 0 && <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--p2)', fontWeight: 700, lineHeight: 1 }}>{count}</span>}
+                  {count > 0 && <span style={{ position: 'absolute', top: -3, right: -3, fontSize: 7, fontFamily: 'var(--font-mono)', background: 'var(--p2)', color: 'var(--n0)', borderRadius: '99px', padding: '0.5px 2.5px', fontWeight: 700, lineHeight: 1.4 }}>{count}</span>}
                 </span>
               </PowerUpTooltip>
             )
@@ -1346,7 +1352,11 @@ function GameContent() {
             .game-inputrow { gap: 8px !important; }
             .game-inputrow input { font-size: 16px !important; padding: 13px 16px !important; }
             .game-inputrow button { font-size: 18px !important; padding: 13px 20px !important; }
-            .pwr-top { font-size: 16px !important; gap: 2px !important; padding: 1px 3px !important; }
+            .pwr-top { font-size: 16px !important; padding: 1px 3px !important; }
+          }
+          /* Very small phones: shrink the top inventory so all icons + corner badges fit */
+          @media (max-width: 360px) {
+            .pwr-top { font-size: 11px !important; padding: 0 !important; }
           }
           #game-root * { -webkit-user-select: none; user-select: none; }
           #game-root input { -webkit-user-select: text; user-select: text; }

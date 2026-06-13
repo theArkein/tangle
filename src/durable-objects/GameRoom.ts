@@ -61,6 +61,7 @@ interface RoomStorage {
   pendingDisconnect?: { playerId: string; expiresAt: number };
   gameMode?: GameMode | undefined;
   botPlayerId?: string | undefined;
+  playerNames?: Record<string, string>;
 }
 
 export class GameRoom implements DurableObject {
@@ -75,6 +76,32 @@ export class GameRoom implements DurableObject {
 
   private get dangerZoneEnabled(): boolean {
     return this.env.DANGER_ZONE_ENABLED === "true";
+  }
+
+  /** Resolve and cache display names for the room's players (bot → "Bot"). */
+  private async ensurePlayerNames(stored: RoomStorage): Promise<void> {
+    if (!stored.playerNames) stored.playerNames = {};
+    let changed = false;
+    for (const id of stored.playerIds) {
+      if (stored.playerNames[id]) continue;
+      if (id === "bot") {
+        stored.playerNames[id] = "Bot";
+        changed = true;
+        continue;
+      }
+      try {
+        const row = await this.env.DB.prepare(
+          "SELECT display_name FROM players WHERE id = ?"
+        )
+          .bind(id)
+          .first<{ display_name: string }>();
+        stored.playerNames[id] = row?.display_name ?? "Player";
+      } catch {
+        stored.playerNames[id] = "Player";
+      }
+      changed = true;
+    }
+    if (changed) await this.saveRoom(stored);
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -165,6 +192,8 @@ export class GameRoom implements DurableObject {
       stored.scores[playerId] = 0;
       await this.saveRoom(stored);
     }
+
+    await this.ensurePlayerNames(stored);
 
     if (stored.playerIds.length === 2 && !stored.matchState) {
       await this.startMatch(stored);
@@ -982,6 +1011,7 @@ export class GameRoom implements DurableObject {
           turnStartAt: stored.turnStartAt,
           serverNow: Date.now(),
           dangerZoneEnabled: this.dangerZoneEnabled,
+          playerNames: stored.playerNames ?? {},
         })
       );
     } catch {
