@@ -356,10 +356,14 @@ function GameContent() {
   const [activeToast, setActiveToast] = useState<{ id: number; variant: ToastVariant; subText?: string; title?: string } | null>(null)
   const toastIdRef = useRef(0)
   const [reactionsOpen, setReactionsOpen] = useState(false)
+  // When a round ends, the user can temporarily hide the results modal to review the final chain
+  const [resultsHidden, setResultsHidden] = useState(false)
 
   const { play, muted, setMuted } = useSoundEngine()
   const playRef = useRef(play)
   useEffect(() => { playRef.current = play }, [play])
+  // Always show the results modal afresh when a round ends or a new round starts
+  useEffect(() => { setResultsHidden(false) }, [matchState?.status, matchState?.currentRound?.roundNumber])
   useEffect(() => { setIsMobile(navigator.maxTouchPoints > 0) }, [])
 
   // Mock game state for dev testing — enable with ?mode=dev (no room parameter)
@@ -982,7 +986,7 @@ function GameContent() {
     )
   }
 
-  const isMyTurn = round.currentPlayerId === myId
+  const isMyTurn = matchState.status === 'round_active' && round.currentPlayerId === myId
   const opponentId = matchState.player1Id === myId ? matchState.player2Id : matchState.player1Id
   const opponentName = opponentId === 'bot' ? 'Bot' : 'Opponent'
   const gameMode: GameMode = matchState.gameMode ?? 'duel'
@@ -1465,6 +1469,18 @@ function GameContent() {
         const opponentConfirmed = ctx?.nextRoundConfirmations.includes(opponentId) ?? false
         const myRoundWins = matchState.roundWins[myId] ?? 0
         const oppRoundWins = matchState.roundWins[opponentId] ?? 0
+        // Hidden: show a floating button to bring the results back while the user reviews the board
+        if (resultsHidden) {
+          return (
+            <button
+              onClick={() => setResultsHidden(false)}
+              style={{ position: 'fixed', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)', left: '50%', transform: 'translateX(-50%)', zIndex: 200, display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--n900)', color: 'var(--n0)', border: 'none', borderRadius: 'var(--radius-full)', padding: '10px 18px', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-heading)', cursor: 'pointer', boxShadow: '0 6px 20px rgba(0,0,0,0.25)' }}
+            >
+              {iWonRound ? '🎉' : '😤'} Round results
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: nextRoundTimeLeft <= 5 ? 'var(--danger)' : 'var(--n400)' }}>{Math.ceil(nextRoundTimeLeft)}s</span>
+            </button>
+          )
+        }
         return (
           <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}>
             <div style={{ width: '100%', maxWidth: 360, background: 'var(--n0)', border: '1px solid var(--n200)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', textAlign: 'center', boxShadow: '0 16px 48px rgba(0,0,0,0.18)' }}>
@@ -1483,6 +1499,12 @@ function GameContent() {
               <div style={{ marginTop: '8px' }}>
                 <Button variant="secondary" size="lg" full onClick={() => { window.location.href = '/' }}>Back to Lobby</Button>
               </div>
+              <button
+                onClick={() => setResultsHidden(true)}
+                style={{ marginTop: '12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: 'var(--n500)', fontFamily: 'var(--font-heading)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                👁 View final board
+              </button>
               <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--n500)' }}>
                 {opponentConfirmed ? 'Opponent is ready' : 'Waiting on opponent…'}
                 <span style={{ marginLeft: '8px', fontFamily: 'var(--font-mono)', color: nextRoundTimeLeft <= 5 ? 'var(--danger)' : 'var(--n400)' }}>
