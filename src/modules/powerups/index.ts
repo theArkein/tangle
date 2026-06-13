@@ -1,4 +1,4 @@
-import { FREEZE } from "./freeze";
+import { EXTEND } from "./freeze";
 import { SECOND_LIFE } from "./secondLife";
 import { LETTER_BOMB } from "./letterBomb";
 import { DOUBLE } from "./double";
@@ -8,7 +8,7 @@ import { TAX } from "./tax";
 import type { PowerUpDefinition, PowerUpId } from "./types";
 
 export const REGISTRY: readonly PowerUpDefinition[] = [
-  FREEZE,
+  EXTEND,
   SECOND_LIFE,
   LETTER_BOMB,
   DOUBLE,
@@ -26,9 +26,9 @@ export function getDefinition(id: PowerUpId): PowerUpDefinition | undefined {
 }
 
 export * from "./types";
-export { FREEZE, FREEZE_EXTENSION_MS } from "./freeze";
+export { EXTEND, EXTEND_DELTA_MS } from "./freeze";
 export { SECOND_LIFE } from "./secondLife";
-export { LETTER_BOMB, pickHardLetter, wordContainsRequired } from "./letterBomb";
+export { LETTER_BOMB } from "./letterBomb";
 export { DOUBLE } from "./double";
 export { WILD } from "./wild";
 export { ANCHOR } from "./anchor";

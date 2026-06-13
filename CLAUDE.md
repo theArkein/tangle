@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Tangle is a real-time 2-player word chain game built on Cloudflare's stack. Players must submit words that start with the last two letters of the previous word, with turn timers, scoring, and ELO-based matchmaking.
+Tangle is a real-time 2-player word chain game built on Cloudflare's stack. Players must submit words that start with the last letter of the previous word, with turn timers, scoring, and ELO-based matchmaking.
 
 ## Commands
 

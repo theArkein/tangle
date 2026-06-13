@@ -5,5 +5,5 @@ export const TAX: PowerUpDefinition = {
   name: "Tax",
   category: "offensive",
   rarity: "common",
-  description: "Reduce opponent's current round score by 10 points (minimum 0).",
+  description: "Reduce opponent's current round score by 4 points (minimum 0).",
 };

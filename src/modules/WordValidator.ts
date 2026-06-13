@@ -14,8 +14,12 @@ export interface Dictionary {
   has(word: string): Promise<boolean>;
 }
 
+const RARE_LETTERS_ALL = new Set(["q","x","z","j","v","k","w","f","h","y","b"]);
+
 export interface ValidateOptions {
   requiredContainingLetter?: string | undefined;
+  // When true, word must contain any rare letter (Q/X/Z/J/V/K/W/F/H/Y/B) — Letter Bomb effect.
+  requiredAnyRareLetter?: boolean | undefined;
   minLength?: number | undefined;
   // When true, skip the "must start with requiredLetter" check (Wild power-up).
   skipLetterCheck?: boolean | undefined;
@@ -46,6 +50,12 @@ export async function validate(
   if (options.requiredContainingLetter) {
     const containing = options.requiredContainingLetter.toLowerCase();
     if (!normalised.includes(containing)) {
+      return { valid: false, reason: "missing_required_letter" };
+    }
+  }
+
+  if (options.requiredAnyRareLetter) {
+    if (![...normalised].some(c => RARE_LETTERS_ALL.has(c))) {
       return { valid: false, reason: "missing_required_letter" };
     }
   }

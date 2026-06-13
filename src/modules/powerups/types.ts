@@ -5,7 +5,7 @@ export type PowerUpId =
   | "wild"
   | "anchor"
   | "tax"
-  | "freeze";
+  | "extend";
 
 export type Category = "defensive" | "offensive" | "disruption";
 export type Rarity = "common" | "uncommon" | "rare";
@@ -15,7 +15,7 @@ export type PlayerId = string;
 export type PowerUpInventory = Record<PowerUpId, number>;
 
 export type ActiveEffect =
-  | { kind: "letterBomb"; onPlayerId: PlayerId; requiredLetter: string }
+  | { kind: "letterBomb"; onPlayerId: PlayerId; anyRareLetter: true }
   | { kind: "doubleScore"; forPlayerId: PlayerId; wordsRemaining: number }
   | { kind: "wildPending"; forPlayerId: PlayerId }
   | { kind: "anchor"; onPlayerId: PlayerId; minLength: number };
@@ -48,7 +48,7 @@ export function emptyInventory(): PowerUpInventory {
     wild: 0,
     anchor: 0,
     tax: 0,
-    freeze: 0,
+    extend: 0,
   };
 }
 

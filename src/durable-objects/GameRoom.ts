@@ -17,7 +17,7 @@ import {
   addToInventory,
   consumeLetterBomb,
   evaluateDrops,
-  getLetterBombRequirement,
+  hasLetterBombEffect,
   isWildPending,
   consumeWild,
   decrementDouble,
@@ -25,6 +25,7 @@ import {
   getAnchor,
   consumeAnchor,
 } from "../modules/PowerUpEngine";
+import type { PowerUpDrop } from "../modules/PowerUpEngine";
 import type { PowerUpId } from "../modules/powerups/types";
 import {
   DANGER_ZONE_CHAIN_THRESHOLD,
@@ -296,7 +297,7 @@ export class GameRoom implements DurableObject {
         : stored.matchState.player1Id;
 
     const usedWords = new Set(round.chain);
-    const requiredContainingLetter = getLetterBombRequirement(round.activeEffects, playerId);
+    const requiredAnyRareLetter = hasLetterBombEffect(round.activeEffects, playerId);
     const anchorEffect = getAnchor(round.activeEffects, playerId);
     const minLength = anchorEffect?.minLength;
     const skipLetterCheck = isWildPending(round.activeEffects, playerId);
@@ -306,7 +307,7 @@ export class GameRoom implements DurableObject {
       round.seedLetter,
       usedWords,
       this.dictionary,
-      { requiredContainingLetter, minLength, skipLetterCheck }
+      { requiredAnyRareLetter, minLength, skipLetterCheck }
     );
 
     if (!validation.valid) {
@@ -396,6 +397,7 @@ export class GameRoom implements DurableObject {
     });
     stored.matchState = wordResult.state;
 
+    const appliedDrops: PowerUpDrop[] = [];
     if (stored.matchState.currentRound) {
       stored.matchState.currentRound.seedLetter =
         word[word.length - 1] ?? round.seedLetter;
@@ -405,10 +407,14 @@ export class GameRoom implements DurableObject {
       for (const drop of evalResult.drops) {
         const playerInv = stored.matchState.currentRound.powerUpInventory[drop.playerId];
         if (playerInv) {
-          stored.matchState.currentRound.powerUpInventory[drop.playerId] = addToInventory(
-            playerInv,
-            drop.id
-          );
+          const totalHeld = Object.values(playerInv).reduce((s, n) => s + n, 0);
+          if (totalHeld < 3) {
+            stored.matchState.currentRound.powerUpInventory[drop.playerId] = addToInventory(
+              playerInv,
+              drop.id
+            );
+            appliedDrops.push(drop);
+          }
         }
       }
     }
@@ -419,7 +425,7 @@ export class GameRoom implements DurableObject {
       this.broadcastAll(JSON.stringify({ type: "danger_zone_entered" }));
     }
 
-    for (const drop of evalResult.drops) {
+    for (const drop of appliedDrops) {
       this.broadcastAll(
         JSON.stringify({
           type: "power_up_earned",
@@ -544,7 +550,7 @@ export class GameRoom implements DurableObject {
     round.powerUpInventory[playerId] = result.inventory;
     round.activeEffects = result.activeEffects;
 
-    // Freeze — extend current alarm by 5 seconds.
+    // Extend — add 5 seconds to current alarm.
     if (result.alarmDeltaMs) {
       const currentAlarm = await this.state.storage.getAlarm();
       if (currentAlarm !== null) {
@@ -553,11 +559,11 @@ export class GameRoom implements DurableObject {
       }
     }
 
-    // Tax — deduct 10 from opponent's round score and match score (floor at 0).
+    // Tax — deduct 4 from opponent's round score and match score (floor at 0).
     if (result.taxOpponent) {
       const opponentRoundScore = round.playerRoundScores[opponentId] ?? 0;
-      round.playerRoundScores[opponentId] = Math.max(0, opponentRoundScore - 10);
-      stored.scores[opponentId] = Math.max(0, (stored.scores[opponentId] ?? 0) - 10);
+      round.playerRoundScores[opponentId] = Math.max(0, opponentRoundScore - 4);
+      stored.scores[opponentId] = Math.max(0, (stored.scores[opponentId] ?? 0) - 4);
     }
 
     this.broadcastAll(
@@ -690,40 +696,6 @@ export class GameRoom implements DurableObject {
 
     const round = stored.matchState.currentRound;
     const timedOutPlayerId = round.currentPlayerId;
-
-    // Second Life — auto-activates on timeout if player has one in inventory.
-    const inventory = round.powerUpInventory[timedOutPlayerId];
-    if ((inventory?.secondLife ?? 0) > 0) {
-      round.powerUpInventory[timedOutPlayerId] = {
-        ...inventory!,
-        secondLife: inventory!.secondLife - 1,
-      };
-      this.broadcastAll(
-        JSON.stringify({
-          type: "second_life_consumed",
-          playerId: timedOutPlayerId,
-        })
-      );
-      const inDZ =
-        this.dangerZoneEnabled &&
-        round.chain.length >= DANGER_ZONE_CHAIN_THRESHOLD;
-      const modeConfig = getModeConfig(stored.matchState.gameMode);
-      const resetMs = inDZ ? DANGER_ZONE_TIMER_MS : modeConfig.turnTimeoutMs;
-      stored.turnStartAt = Date.now();
-      await this.saveRoom(stored);
-      await this.state.storage.setAlarm(Date.now() + resetMs);
-      const slResult = transition(stored.matchState, {
-        type: "turnTimeout",
-        playerId: timedOutPlayerId,
-        secondLifeConsumed: true,
-      });
-      stored.matchState = slResult.state;
-      await this.saveRoom(stored);
-      await this.applyEffects(slResult.effects, stored);
-      await this.flushExpiredDisconnect(stored);
-      return;
-    }
-
     const prevRoundNumber = round.roundNumber;
     const result = transition(stored.matchState, {
       type: "turnTimeout",
@@ -827,6 +799,7 @@ export class GameRoom implements DurableObject {
     });
     stored.matchState = wordResult.state;
 
+    const botAppliedDrops: PowerUpDrop[] = [];
     if (stored.matchState.currentRound) {
       stored.matchState.currentRound.seedLetter = word[word.length - 1] ?? round.seedLetter;
       stored.matchState.currentRound.dropTriggers = evalResult.triggers;
@@ -834,17 +807,21 @@ export class GameRoom implements DurableObject {
       for (const drop of evalResult.drops) {
         const playerInv = stored.matchState.currentRound.powerUpInventory[drop.playerId];
         if (playerInv) {
-          stored.matchState.currentRound.powerUpInventory[drop.playerId] = addToInventory(
-            playerInv,
-            drop.id
-          );
+          const totalHeld = Object.values(playerInv).reduce((s, n) => s + n, 0);
+          if (totalHeld < 3) {
+            stored.matchState.currentRound.powerUpInventory[drop.playerId] = addToInventory(
+              playerInv,
+              drop.id
+            );
+            botAppliedDrops.push(drop);
+          }
         }
       }
     }
 
     stored.scores[botId] = (stored.scores[botId] ?? 0) + scoreResult.points;
 
-    for (const drop of evalResult.drops) {
+    for (const drop of botAppliedDrops) {
       this.broadcastAll(
         JSON.stringify({
           type: "power_up_earned",

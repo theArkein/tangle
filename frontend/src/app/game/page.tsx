@@ -23,7 +23,7 @@ type PowerUpInventory = Record<PowerUpId, number>
 type GameMode = 'duel' | 'classic'
 
 type ActiveEffect =
-  | { kind: 'letterBomb'; onPlayerId: string; requiredLetter: string }
+  | { kind: 'letterBomb'; onPlayerId: string; anyRareLetter: true }
   | { kind: 'doubleScore'; forPlayerId: string; wordsRemaining: number }
   | { kind: 'wildPending'; forPlayerId: string }
   | { kind: 'anchor'; onPlayerId: string; minLength: number }
@@ -110,45 +110,84 @@ const POWER_DESC = Object.fromEntries(
   POWER_UP_GUIDE.map(e => [e.id, { own: e.description, opp: e.opponentDescription }])
 ) as Record<PowerUpId, { own: string; opp: string }>
 
-function PowerUpTooltip({ id, description, children }: { id: PowerUpId; description: string; children: React.ReactNode }) {
+function PowerUpTooltip({ id, description, children, onActivate, disabled }: { id: PowerUpId; description: string; children: React.ReactNode; onActivate?: () => void; disabled?: boolean }) {
   const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null)
+  const [longPressActive, setLongPressActive] = useState(false)
   const ref = useRef<HTMLSpanElement>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const getAnchorPos = () => {
+    if (!ref.current) return null
+    const r = ref.current.getBoundingClientRect()
+    return { x: r.left + r.width / 2, y: r.top }
+  }
+
+  const tooltipNode = anchor ? (
+    <span style={{
+      position: 'fixed',
+      top: anchor.y - 7,
+      left: anchor.x,
+      transform: 'translate(-50%, -100%)',
+      background: 'var(--n900)',
+      color: 'var(--n0)',
+      padding: '6px 9px',
+      borderRadius: 7,
+      fontSize: 11,
+      lineHeight: 1.4,
+      width: 170,
+      textAlign: 'center',
+      pointerEvents: 'none',
+      zIndex: 9999,
+      boxShadow: '0 3px 10px rgba(0,0,0,0.30)',
+    } as React.CSSProperties}>
+      <strong style={{ display: 'block', fontSize: 13, marginBottom: 3 }}>{POWER_UP_LABELS[id].emoji} {POWER_UP_LABELS[id].name}</strong>
+      {description}
+      <span style={{ position: 'absolute', bottom: -4, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '4px solid var(--n900)' }} />
+    </span>
+  ) : null
+
+  if (onActivate !== undefined) {
+    // Mobile-first: long-press → tooltip, short tap → activate
+    return (
+      <span
+        ref={ref}
+        style={{ position: 'relative', display: 'inline-flex' }}
+        onPointerDown={e => {
+          e.preventDefault()
+          timerRef.current = setTimeout(() => {
+            setLongPressActive(true)
+            setAnchor(getAnchorPos())
+          }, 500)
+        }}
+        onPointerUp={() => {
+          if (timerRef.current) clearTimeout(timerRef.current)
+          if (!longPressActive && !disabled) onActivate()
+          setLongPressActive(false)
+          setAnchor(null)
+        }}
+        onPointerLeave={() => {
+          if (timerRef.current) clearTimeout(timerRef.current)
+          setLongPressActive(false)
+          setAnchor(null)
+        }}
+        onMouseEnter={() => { if (!longPressActive) setAnchor(getAnchorPos()) }}
+        onMouseLeave={() => { if (!longPressActive) setAnchor(null) }}
+      >
+        {children}
+        {tooltipNode}
+      </span>
+    )
+  }
+
   return (
     <span
       ref={ref}
       style={{ position: 'relative', display: 'inline-flex' }}
-      onMouseEnter={() => {
-        if (ref.current) {
-          const r = ref.current.getBoundingClientRect()
-          setAnchor({ x: r.left + r.width / 2, y: r.top })
-        }
-      }}
+      onMouseEnter={() => setAnchor(getAnchorPos())}
       onMouseLeave={() => setAnchor(null)}
     >
       {children}
-      {anchor && (
-        <span style={{
-          position: 'fixed',
-          top: anchor.y - 7,
-          left: anchor.x,
-          transform: 'translate(-50%, -100%)',
-          background: 'var(--n900)',
-          color: 'var(--n0)',
-          padding: '6px 9px',
-          borderRadius: 7,
-          fontSize: 11,
-          lineHeight: 1.4,
-          width: 170,
-          textAlign: 'center',
-          pointerEvents: 'none',
-          zIndex: 9999,
-          boxShadow: '0 3px 10px rgba(0,0,0,0.30)',
-        } as React.CSSProperties}>
-          <strong style={{ display: 'block', fontSize: 13, marginBottom: 3 }}>{POWER_UP_LABELS[id].emoji} {POWER_UP_LABELS[id].name}</strong>
-          {description}
-          <span style={{ position: 'absolute', bottom: -4, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '4px solid var(--n900)' }} />
-        </span>
-      )}
+      {tooltipNode}
     </span>
   )
 }
@@ -193,13 +232,13 @@ function GameContent() {
   const [oppHighlights, setOppHighlights] = useState<Partial<Record<PowerUpId, 'earned' | 'activated'>>>({})
   const [reactionFeed, setReactionFeed] = useState<Array<{ id: number; emoji: string; byMe: boolean }>>([])
   const [forfeitedBy, setForfeitedBy] = useState<string | null>(null)
+  const [powerFloats, setPowerFloats] = useState<Array<{ id: number; emoji: string; side: 'mine' | 'opp' }>>([])
+  const powerFloatIdRef = useRef(0)
 
   const [isMobile, setIsMobile] = useState(false)
   const [keyboardVisible, setKeyboardVisible] = useState(true)
   const [activeToast, setActiveToast] = useState<{ id: number; variant: ToastVariant; subText?: string; title?: string } | null>(null)
   const toastIdRef = useRef(0)
-  const [powerNotifs, setPowerNotifs] = useState<Array<{ id: number; emoji: string; title: string; desc: string; byMe: boolean }>>([])
-  const notifIdRef = useRef(0)
   const [reactionsOpen, setReactionsOpen] = useState(false)
 
   const { play, muted, setMuted } = useSoundEngine()
@@ -316,10 +355,9 @@ function GameContent() {
         setter(h => ({ ...h, [msg.powerup]: 'earned' }))
         setTimeout(() => setter(h => { const n = { ...h }; delete n[msg.powerup]; return n }), 1500)
         const pLabel = POWER_UP_LABELS[msg.powerup]
-        const pDesc = POWER_DESC[msg.powerup]
-        const nid = ++notifIdRef.current
-        setPowerNotifs(prev => [...prev, { id: nid, emoji: pLabel?.emoji ?? '', title: `${isMe ? 'You' : 'Opponent'} picked up ${pLabel?.name}`, desc: isMe ? (pDesc?.own ?? '') : (pDesc?.opp ?? ''), byMe: isMe }])
-        setTimeout(() => setPowerNotifs(prev => prev.filter(n => n.id !== nid)), 2500)
+        const fid = ++powerFloatIdRef.current
+        setPowerFloats(prev => [...prev, { id: fid, emoji: pLabel?.emoji ?? '', side: isMe ? 'mine' : 'opp' }])
+        setTimeout(() => setPowerFloats(prev => prev.filter(f => f.id !== fid)), 1500)
         playRef.current(isMe ? 'power_earned' : 'opp_turn')
         return
       }
@@ -329,11 +367,11 @@ function GameContent() {
         const setter = isMe ? setMyHighlights : setOppHighlights
         setter(h => ({ ...h, [msg.powerup]: 'activated' }))
         setTimeout(() => setter(h => { const n = { ...h }; delete n[msg.powerup]; return n }), 1000)
-        const pLabel2 = POWER_UP_LABELS[msg.powerup]
-        const pDesc2 = POWER_DESC[msg.powerup]
-        const nid2 = ++notifIdRef.current
-        setPowerNotifs(prev => [...prev, { id: nid2, emoji: pLabel2?.emoji ?? '', title: `${isMe ? 'You' : 'Opponent'} activated ${pLabel2?.name}`, desc: isMe ? (pDesc2?.own ?? '') : (pDesc2?.opp ?? ''), byMe: isMe }])
-        setTimeout(() => setPowerNotifs(prev => prev.filter(n => n.id !== nid2)), 2500)
+        // Only toast when I'm the target (opponent used something on me)
+        if (!isMe && msg.targetPlayerId === myId) {
+          const pLabel2 = POWER_UP_LABELS[msg.powerup]
+          setActiveToast({ id: ++toastIdRef.current, variant: 'error', title: `${pLabel2?.emoji ?? ''} ${pLabel2?.name ?? msg.powerup}` })
+        }
         playRef.current(isMe ? 'power_used_me' : 'power_used_opp')
         return
       }
@@ -343,11 +381,6 @@ function GameContent() {
         const setter = isMe ? setMyHighlights : setOppHighlights
         setter(h => ({ ...h, secondLife: 'activated' }))
         setTimeout(() => setter(h => { const n = { ...h }; delete n.secondLife; return n }), 1000)
-        const slLabel = POWER_UP_LABELS.secondLife
-        const slDesc = isMe ? (POWER_DESC.secondLife?.own ?? '') : (POWER_DESC.secondLife?.opp ?? '')
-        const nid3 = ++notifIdRef.current
-        setPowerNotifs(prev => [...prev, { id: nid3, emoji: slLabel.emoji, title: `${isMe ? 'You' : 'Opponent'} activated ${slLabel.name}`, desc: slDesc, byMe: isMe }])
-        setTimeout(() => setPowerNotifs(prev => prev.filter(n => n.id !== nid3)), 2500)
         playRef.current(isMe ? 'power_used_me' : 'power_used_opp')
         return
       }
@@ -430,7 +463,7 @@ function GameContent() {
   // Use DZ-aware max: DZ timeout is always 10s regardless of game mode
   const DZ_TIMER_SECS = 10
   const currentChainLength = matchState?.currentRound?.chain.length ?? 0
-  const currentlyInDZ = dangerZoneEnabled && currentChainLength >= 16
+  const currentlyInDZ = dangerZoneEnabled && currentChainLength >= 12
   const timerMaxSecs = currentlyInDZ ? DZ_TIMER_SECS : (MODE_CONFIG[matchState?.gameMode ?? 'duel'].turnSeconds)
   useEffect(() => {
     if (matchState?.status !== 'round_active') return
@@ -794,10 +827,10 @@ function GameContent() {
   const opponentName = opponentId === 'bot' ? 'Bot' : 'Opponent'
   const gameMode: GameMode = matchState.gameMode ?? 'duel'
   const modeCfg = MODE_CONFIG[gameMode]
-  const emptyInv: PowerUpInventory = { freeze: 0, secondLife: 0, letterBomb: 0, double: 0, wild: 0, anchor: 0, tax: 0 }
+  const emptyInv: PowerUpInventory = { extend: 0, secondLife: 0, letterBomb: 0, double: 0, wild: 0, anchor: 0, tax: 0 }
   const myInventory: PowerUpInventory = round.powerUpInventory[myId] ?? emptyInv
   const opponentInventory: PowerUpInventory = round.powerUpInventory[opponentId] ?? emptyInv
-  const inDangerZone = dangerZoneEnabled && round.chain.length >= 16
+  const inDangerZone = dangerZoneEnabled && round.chain.length >= 12
   inDangerZoneRef.current = inDangerZone
   const timerPct = (timeLeft / timerMaxSecs) * 100
   const timerUrgent = timeLeft <= 5 || inDangerZone
@@ -814,7 +847,7 @@ function GameContent() {
   const showScoreGap = gameMode === 'duel' && (myRoundScore > 0 || oppRoundScore > 0)
 
   const oppEffectChips: string[] = round.activeEffects.flatMap(e => {
-    if (e.kind === 'letterBomb'  && e.onPlayerId === opponentId) return [`💣 ${e.requiredLetter}`]
+    if (e.kind === 'letterBomb'  && e.onPlayerId === opponentId) return ['💣 rare']
     if (e.kind === 'anchor'      && e.onPlayerId === opponentId) return [`⚓ ≥${e.minLength}`]
     if (e.kind === 'doubleScore' && e.forPlayerId === opponentId) return [`🎯 ${e.wordsRemaining}W`]
     if (e.kind === 'wildPending' && e.forPlayerId === opponentId) return ['🃏 Wild']
@@ -822,7 +855,7 @@ function GameContent() {
   })
 
   const myEffectChips: string[] = round.activeEffects.flatMap(e => {
-    if (e.kind === 'letterBomb'  && e.onPlayerId === myId)    return [`💣 ${e.requiredLetter}`]
+    if (e.kind === 'letterBomb'  && e.onPlayerId === myId)    return ['💣 rare']
     if (e.kind === 'anchor'      && e.onPlayerId === myId)    return [`⚓ ≥${e.minLength}`]
     if (e.kind === 'doubleScore' && e.forPlayerId === myId)   return [`🎯 ${e.wordsRemaining}W`]
     if (e.kind === 'wildPending' && e.forPlayerId === myId)   return ['🃏 Wild']
@@ -861,30 +894,18 @@ function GameContent() {
         </div>
       )}
 
-      {/* Notification overlay — power notifs + toast, all centered top */}
-      {(powerNotifs.length > 0 || activeToast) && (
-        <div style={{ position: 'fixed', top: 12, left: 0, right: 0, zIndex: 60, pointerEvents: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '0 14px' }}>
-          {powerNotifs.map(n => (
-            <div key={n.id} style={{ background: 'var(--n800)', color: 'var(--n0)', padding: '6px 10px 6px 8px', borderRadius: 'var(--radius-md)', borderLeft: `7px solid ${n.byMe ? 'var(--p1)' : 'var(--p2)'}`, animation: 'notifFade 2.5s ease-out forwards', maxWidth: 260, width: '100%', display: 'flex', alignItems: 'center', gap: 8, pointerEvents: 'auto' }}>
-              <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>{n.emoji}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-heading)', lineHeight: 1.2, color: n.byMe ? 'var(--p1)' : 'var(--p2)' }}>{n.title}</div>
-                <div style={{ fontSize: 10, opacity: 0.7, marginTop: 2, fontFamily: 'var(--font-body)', lineHeight: 1.3 }}>{n.desc}</div>
-              </div>
-              <button onClick={() => setPowerNotifs(prev => prev.filter(p => p.id !== n.id))} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', fontSize: 11, lineHeight: 1, color: 'rgba(255,255,255,0.5)', flexShrink: 0 }}>✕</button>
-            </div>
-          ))}
-          {activeToast && (
-            <div style={{ pointerEvents: 'auto', width: '100%', maxWidth: 260 }}>
-              <GameToast
-                key={activeToast.id}
-                variant={activeToast.variant}
-                subText={activeToast.subText}
-                title={activeToast.title}
-                onDismiss={() => setActiveToast(null)}
-              />
-            </div>
-          )}
+      {/* Toast overlay */}
+      {activeToast && (
+        <div style={{ position: 'fixed', top: 12, left: 0, right: 0, zIndex: 60, pointerEvents: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0 14px' }}>
+          <div style={{ pointerEvents: 'auto', width: '100%', maxWidth: 260 }}>
+            <GameToast
+              key={activeToast.id}
+              variant={activeToast.variant}
+              subText={activeToast.subText}
+              title={activeToast.title}
+              onDismiss={() => setActiveToast(null)}
+            />
+          </div>
         </div>
       )}
 
@@ -913,14 +934,26 @@ function GameContent() {
           </div>
         </div>
 
-        <div style={{ textAlign: 'center', flexShrink: 0 }}>
-          {/* Score gap indicator — Duel mode */}
-          {showScoreGap && (
+        <div style={{ textAlign: 'center', flexShrink: 0, minWidth: 44 }}>
+          {/* Central countdown */}
+          {matchState.status === 'round_active' && (
             <div style={{
               fontSize: 20,
               fontFamily: 'var(--font-mono)',
               fontWeight: 800,
-              marginTop: 3,
+              lineHeight: 1,
+              color: timeLeft <= 5 ? 'var(--danger)' : timeLeft <= 10 ? '#f59e0b' : 'var(--n500)',
+            }}>
+              {Math.ceil(timeLeft)}s
+            </div>
+          )}
+          {/* Score gap — Duel mode */}
+          {showScoreGap && (
+            <div style={{
+              fontSize: 11,
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 700,
+              marginTop: 2,
               color: scoreGap > 0 ? 'var(--success)' : scoreGap < 0 ? 'var(--danger)' : 'var(--n400)',
             }}>
               {scoreGap > 0 ? `▲${scoreGap}` : scoreGap < 0 ? `▼${Math.abs(scoreGap)}` : '–'}
@@ -1035,20 +1068,18 @@ function GameContent() {
             {(Object.keys(POWER_UP_LABELS) as PowerUpId[]).map(id => {
               const count = myInventory[id] ?? 0
               const earned = count > 0
-              // secondLife and freeze can be used anytime (affect your own timer); all others require your turn
-              const turnLocked = !isMyTurn && id !== 'secondLife' && id !== 'freeze'
+              // secondLife and extend can be used anytime (affect your own timer); all others require your turn
+              const turnLocked = !isMyTurn && id !== 'secondLife' && id !== 'extend'
               const hl = myHighlights[id]
               return (
-                <PowerUpTooltip key={id} id={id} description={POWER_DESC[id].own}>
-                  <button
-                    disabled={!earned || turnLocked}
-                    onClick={() => activatePowerUp(id)}
-                    style={{ position: 'relative', background: 'none', border: 'none', padding: '2px 3px', cursor: earned && !turnLocked ? 'pointer' : 'default', opacity: earned ? (turnLocked ? 0.5 : 1) : 0.2, filter: earned ? 'none' : 'grayscale(1)', flexShrink: 0, animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
+                <PowerUpTooltip key={id} id={id} description={POWER_DESC[id].own} onActivate={earned && !turnLocked ? () => activatePowerUp(id) : () => {}} disabled={!earned || turnLocked}>
+                  <span
+                    style={{ position: 'relative', display: 'inline-flex', padding: '2px 3px', cursor: earned && !turnLocked ? 'pointer' : 'default', opacity: earned ? (turnLocked ? 0.5 : 1) : 0.2, filter: earned ? 'none' : 'grayscale(1)', flexShrink: 0, borderRadius: 6, animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : (id === 'secondLife' && isMyTurn && timeLeft <= 8 && count > 0) ? 'urgentPulse 0.8s ease-in-out infinite' : 'none' }}>
                     <span style={{ fontSize: 22, lineHeight: 1 }}>{POWER_UP_LABELS[id].emoji}</span>
                     {earned && (
                       <span style={{ position: 'absolute', top: 0, right: 0, fontSize: 8, fontFamily: 'var(--font-mono)', background: 'var(--p1)', color: 'var(--n0)', borderRadius: '99px', padding: '1px 3px', fontWeight: 700, lineHeight: 1 }}>×{count}</span>
                     )}
-                  </button>
+                  </span>
                 </PowerUpTooltip>
               )
             })}
@@ -1060,6 +1091,17 @@ function GameContent() {
           <div style={{ position: 'absolute', top: 8, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 8, pointerEvents: 'none' }}>
             {reactionFeed.map(r => (
               <div key={r.id} style={{ fontSize: 28, animation: 'reactionFloat 3s ease-out forwards' }}>{r.emoji}</div>
+            ))}
+          </div>
+        )}
+
+        {/* Power floats — rise from power icon columns on earn */}
+        {powerFloats.length > 0 && (
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 5 }}>
+            {powerFloats.map(f => (
+              <div key={f.id} style={{ position: 'absolute', bottom: gameMode === 'duel' ? 56 : 12, [f.side === 'mine' ? 'left' : 'right']: '15%', fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono)', color: f.side === 'mine' ? 'var(--p1)' : 'var(--p2)', animation: 'powerFloat 1.5s ease-out forwards', whiteSpace: 'nowrap' }}>
+                +1 {f.emoji}
+              </div>
             ))}
           </div>
         )}
@@ -1087,17 +1129,26 @@ function GameContent() {
           @keyframes wordShimmer { 0% { filter: brightness(1.6) saturate(1.5); transform: scale(1.05); } 100% { filter: brightness(1) saturate(1); transform: scale(1); } }
           @keyframes earnGlow { 0% { box-shadow: 0 0 0 2px #4caf50; } 60% { box-shadow: 0 0 8px 4px #4caf5088; } 100% { box-shadow: 0 0 0 2px #4caf50; } }
           @keyframes activateFlash { 0% { background: var(--accent-warm-faint); } 50% { background: #ffe09a; } 100% { background: var(--n0); } }
-          @keyframes notifFade { 0% { opacity: 0; transform: translateY(-4px); } 15% { opacity: 1; transform: translateY(0); } 85% { opacity: 1; } 100% { opacity: 0; } }
+          @keyframes urgentPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(234,179,8,0.8); } 50% { box-shadow: 0 0 0 6px rgba(234,179,8,0); } }
+          @keyframes powerFloat { 0% { opacity: 0; transform: translateY(0); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-36px); } }
         `}</style>
       </div>
 
       {/* ── Bottom panel ── */}
-      <div style={{ background: 'var(--n0)', borderTop: `1px solid ${inDangerZone ? 'var(--danger-zone)' : 'var(--n200)'}`, padding: '10px 14px 20px', flexShrink: 0 }}>
+      <div style={{ background: 'var(--n0)', borderTop: `3px solid ${isMyTurn ? 'var(--p1)' : inDangerZone ? 'var(--danger-zone)' : 'var(--n200)'}`, padding: '10px 14px 20px', flexShrink: 0 }}>
 
         {/* Timer */}
         <div style={{ marginBottom: 10 }}>
-          <TimerBar percent={timerPct} danger={timerUrgent} label={`${Math.ceil(timeLeft)}s`} />
+          <TimerBar percent={timerPct} danger={timerUrgent} />
         </div>
+
+        {/* Opponent effect bar — shown when an active effect targets me */}
+        {isMyTurn && round.activeEffects.some(e => (e.kind === 'letterBomb' && e.onPlayerId === myId) || (e.kind === 'anchor' && e.onPlayerId === myId)) && (
+          <div style={{ background: 'var(--accent-warm-faint)', border: '1px solid var(--accent-warm-light)', borderRadius: 'var(--radius-md)', padding: '5px 10px', marginBottom: 8, fontSize: 11, fontWeight: 600, color: 'var(--accent-warm-muted)', textAlign: 'center' }}>
+            {round.activeEffects.find(e => e.kind === 'letterBomb' && e.onPlayerId === myId) && '💣 Next word must contain a rare letter'}
+            {round.activeEffects.find(e => e.kind === 'anchor' && e.onPlayerId === myId) && '⚓ Next word must be 6+ letters'}
+          </div>
+        )}
 
         {/* Turn label + word count */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>

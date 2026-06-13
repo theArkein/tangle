@@ -1,4 +1,4 @@
-import { getDefinition, pickHardLetter } from "./powerups";
+import { getDefinition } from "./powerups";
 import { RARE_TIER_1, RARE_TIER_2, RARE_TIER_3 } from "./powerups/pools";
 import type {
   ActiveEffect,
@@ -95,12 +95,12 @@ export function evaluateDrops(input: EvaluateDropsInput): EvaluateDropsResult {
   const newWordCount = prevWordCount + 1;
   nextTriggers.playerWordCounts[playerId] = newWordCount;
 
-  // 1. Freeze — every 25-point multiple crossed
+  // 1. Extend — every 25-point multiple crossed
   const prevThreshold = Math.floor(prevRoundScore / 25);
   const newThreshold = Math.floor(newRoundScore / 25);
   const crossings = Math.max(0, newThreshold - prevThreshold);
   for (let i = 0; i < crossings; i++) {
-    drops.push({ playerId, id: "freeze" });
+    drops.push({ playerId, id: "extend" });
   }
   if (crossings > 0) {
     nextTriggers.playerFreezeThresholds[playerId] = newThreshold;
@@ -186,7 +186,7 @@ export interface ActivateResult {
   error?: ActivateError;
   effect?: ActiveEffect;
   // Signals for instant effects — callers act on these
-  alarmDeltaMs?: number;  // freeze: extend alarm by this amount
+  alarmDeltaMs?: number;  // extend: add 5s to alarm
   taxOpponent?: boolean;  // tax: caller deducts 10 from opponent score
 }
 
@@ -219,7 +219,7 @@ export function activate(input: ActivateInput): ActivateResult {
   let taxOpponent: boolean | undefined;
 
   switch (powerUpId) {
-    case "freeze": {
+    case "extend": {
       // Instant: no persistent effect, caller extends alarm
       alarmDeltaMs = 5_000;
       break;
@@ -233,7 +233,7 @@ export function activate(input: ActivateInput): ActivateResult {
       effect = {
         kind: "letterBomb",
         onPlayerId: opponentId,
-        requiredLetter: pickHardLetter(rng),
+        anyRareLetter: true,
       };
       nextEffects = [
         ...withoutEffectsMatching(
@@ -245,7 +245,7 @@ export function activate(input: ActivateInput): ActivateResult {
       break;
     }
     case "double": {
-      effect = { kind: "doubleScore", forPlayerId: byPlayerId, wordsRemaining: 3 };
+      effect = { kind: "doubleScore", forPlayerId: byPlayerId, wordsRemaining: 2 };
       nextEffects = [
         ...withoutEffectsMatching(
           activeEffects,
@@ -299,25 +299,23 @@ export function activate(input: ActivateInput): ActivateResult {
 export function consumeLetterBomb(
   activeEffects: ActiveEffect[],
   playerId: PlayerId
-): { activeEffects: ActiveEffect[]; consumedRequiredLetter?: string } {
+): { activeEffects: ActiveEffect[] } {
   const idx = activeEffects.findIndex(
     (e) => e.kind === "letterBomb" && e.onPlayerId === playerId
   );
   if (idx < 0) return { activeEffects };
-  const effect = activeEffects[idx] as Extract<ActiveEffect, { kind: "letterBomb" }>;
   const next = [...activeEffects];
   next.splice(idx, 1);
-  return { activeEffects: next, consumedRequiredLetter: effect.requiredLetter };
+  return { activeEffects: next };
 }
 
-export function getLetterBombRequirement(
+export function hasLetterBombEffect(
   activeEffects: ActiveEffect[],
   playerId: PlayerId
-): string | undefined {
-  const e = activeEffects.find(
+): boolean {
+  return activeEffects.some(
     (e) => e.kind === "letterBomb" && e.onPlayerId === playerId
   );
-  return e?.kind === "letterBomb" ? e.requiredLetter : undefined;
 }
 
 export function isWildPending(activeEffects: ActiveEffect[], playerId: PlayerId): boolean {

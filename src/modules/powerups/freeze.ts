@@ -1,11 +1,11 @@
 import type { PowerUpDefinition } from "./types";
 
-export const FREEZE: PowerUpDefinition = {
-  id: "freeze",
-  name: "Freeze",
+export const EXTEND: PowerUpDefinition = {
+  id: "extend",
+  name: "Extend",
   category: "defensive",
   rarity: "common",
   description: "Add 5 seconds to your own turn timer.",
 };
 
-export const FREEZE_EXTENSION_MS = 5_000;
+export const EXTEND_DELTA_MS = 5_000;
