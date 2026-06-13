@@ -6,7 +6,7 @@ import {
   emptyInventory,
   emptyTriggers,
   evaluateDrops,
-  getLetterBombRequirement,
+  hasLetterBombEffect,
   isWildPending,
   consumeWild,
   getDoubleScore,
@@ -28,8 +28,8 @@ function mkScoreResult(word: string, multiplier = 1) {
   return score(word, { multiplier });
 }
 
-describe("PowerUpEngine.evaluateDrops — freeze (25pt threshold)", () => {
-  it("emits a freeze drop when the player crosses a 25-point threshold", () => {
+describe("PowerUpEngine.evaluateDrops — extend (25pt threshold)", () => {
+  it("emits a extend drop when the player crosses a 25-point threshold", () => {
     const { drops, triggers } = evaluateDrops({
       playerId: P1,
       opponentId: P2,
@@ -40,12 +40,12 @@ describe("PowerUpEngine.evaluateDrops — freeze (25pt threshold)", () => {
       triggers: withTriggers(),
     });
 
-    const freezeDrops = drops.filter((d) => d.id === "freeze");
+    const freezeDrops = drops.filter((d) => d.id === "extend");
     expect(freezeDrops).toHaveLength(1);
     expect(triggers.playerFreezeThresholds[P1]).toBe(1);
   });
 
-  it("emits two freeze drops when crossing two 25-point thresholds at once", () => {
+  it("emits two extend drops when crossing two 25-point thresholds at once", () => {
     const { drops } = evaluateDrops({
       playerId: P1,
       opponentId: P2,
@@ -56,7 +56,7 @@ describe("PowerUpEngine.evaluateDrops — freeze (25pt threshold)", () => {
       triggers: withTriggers(),
     });
 
-    expect(drops.filter((d) => d.id === "freeze")).toHaveLength(2);
+    expect(drops.filter((d) => d.id === "extend")).toHaveLength(2);
   });
 });
 
@@ -181,16 +181,16 @@ describe("PowerUpEngine.evaluateDrops — DZ entry secondLife", () => {
 
 describe("PowerUpEngine.activate — Freeze", () => {
   it("decrements inventory and returns alarmDeltaMs of 5000", () => {
-    const inventory = addToInventory(emptyInventory(), "freeze");
+    const inventory = addToInventory(emptyInventory(), "extend");
     const result = activate({
       inventory,
       activeEffects: [],
-      powerUpId: "freeze",
+      powerUpId: "extend",
       byPlayerId: P1,
       opponentId: P2,
     });
     expect(result.error).toBeUndefined();
-    expect(result.inventory.freeze).toBe(0);
+    expect(result.inventory.extend).toBe(0);
     expect(result.alarmDeltaMs).toBe(5_000);
     expect(result.activeEffects).toHaveLength(0);
   });
@@ -199,7 +199,7 @@ describe("PowerUpEngine.activate — Freeze", () => {
     const result = activate({
       inventory: emptyInventory(),
       activeEffects: [],
-      powerUpId: "freeze",
+      powerUpId: "extend",
       byPlayerId: P1,
       opponentId: P2,
     });
@@ -208,7 +208,7 @@ describe("PowerUpEngine.activate — Freeze", () => {
 });
 
 describe("PowerUpEngine — Double", () => {
-  it("creates a doubleScore effect with 3 words remaining", () => {
+  it("creates a doubleScore effect with 2 words remaining", () => {
     const inventory = addToInventory(emptyInventory(), "double");
     const result = activate({
       inventory,
@@ -219,7 +219,7 @@ describe("PowerUpEngine — Double", () => {
     });
     expect(result.error).toBeUndefined();
     const ds = getDoubleScore(result.activeEffects, P1);
-    expect(ds?.wordsRemaining).toBe(3);
+    expect(ds?.wordsRemaining).toBe(2);
   });
 
   it("decrements wordsRemaining and removes effect at 0", () => {
@@ -232,8 +232,7 @@ describe("PowerUpEngine — Double", () => {
     }).activeEffects;
 
     effects = decrementDouble(effects, P1);
-    expect(getDoubleScore(effects, P1)?.wordsRemaining).toBe(2);
-    effects = decrementDouble(effects, P1);
+    expect(getDoubleScore(effects, P1)?.wordsRemaining).toBe(1);
     effects = decrementDouble(effects, P1);
     expect(getDoubleScore(effects, P1)).toBeUndefined();
   });
@@ -299,7 +298,7 @@ describe("PowerUpEngine — Tax", () => {
 });
 
 describe("PowerUpEngine — Letter Bomb", () => {
-  it("sets a required letter on the opponent and is queryable", () => {
+  it("sets a rare-letter bomb on the opponent and is queryable", () => {
     const inventory = addToInventory(emptyInventory(), "letterBomb");
     const a = activate({
       inventory,
@@ -307,14 +306,13 @@ describe("PowerUpEngine — Letter Bomb", () => {
       powerUpId: "letterBomb",
       byPlayerId: P1,
       opponentId: P2,
-      rng: () => 0, // picks "Q"
     });
     expect(a.error).toBeUndefined();
-    const required = getLetterBombRequirement(a.activeEffects, P2);
-    expect(required).toBe("Q");
+    expect(hasLetterBombEffect(a.activeEffects, P2)).toBe(true);
+    expect(hasLetterBombEffect(a.activeEffects, P1)).toBe(false);
   });
 
-  it("consumes the bomb constraint after one turn", () => {
+  it("consumes the bomb after one turn", () => {
     const inventory = addToInventory(emptyInventory(), "letterBomb");
     const a = activate({
       inventory,
@@ -322,10 +320,8 @@ describe("PowerUpEngine — Letter Bomb", () => {
       powerUpId: "letterBomb",
       byPlayerId: P1,
       opponentId: P2,
-      rng: () => 0,
     });
-    const after = consumeLetterBomb(a.activeEffects, P2);
-    expect(after.consumedRequiredLetter).toBe("Q");
-    expect(getLetterBombRequirement(after.activeEffects, P2)).toBeUndefined();
+    const { activeEffects: after } = consumeLetterBomb(a.activeEffects, P2);
+    expect(hasLetterBombEffect(after, P2)).toBe(false);
   });
 });

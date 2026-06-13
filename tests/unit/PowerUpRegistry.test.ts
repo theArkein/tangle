@@ -10,7 +10,7 @@ describe("Power-up registry", () => {
     expect(ids).toEqual([
       "anchor",
       "double",
-      "freeze",
+      "extend",
       "letterBomb",
       "secondLife",
       "tax",
@@ -40,7 +40,7 @@ describe("Power-up registry", () => {
   });
 
   it("getDefinition returns the matching record", () => {
-    expect(getDefinition("freeze")?.name).toBe("Freeze");
+    expect(getDefinition("extend")?.name).toBe("Extend");
     expect(getDefinition("nonexistent" as never)).toBeUndefined();
   });
 });

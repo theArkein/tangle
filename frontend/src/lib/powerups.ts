@@ -5,7 +5,7 @@
 // lives here so the guide and the in-game HUD stay in sync.
 
 export type PowerUpId =
-  | 'freeze'
+  | 'extend'
   | 'secondLife'
   | 'letterBomb'
   | 'double'
@@ -16,7 +16,7 @@ export type PowerUpId =
 export type PowerUpCategory = 'defensive' | 'offensive' | 'disruption'
 
 export const POWER_UP_LABELS: Record<PowerUpId, { name: string; emoji: string }> = {
-  freeze: { name: 'Freeze', emoji: '❄️' },
+  extend: { name: 'Extend', emoji: '⏳' },
   secondLife: { name: '2nd Life', emoji: '💚' },
   letterBomb: { name: 'Letter Bomb', emoji: '💣' },
   double: { name: 'Double', emoji: '🎯' },
@@ -39,44 +39,44 @@ export interface PowerUpGuideEntry {
 
 export const POWER_UP_GUIDE: PowerUpGuideEntry[] = [
   {
-    id: 'freeze',
-    name: 'Freeze',
+    id: 'extend',
+    name: 'Extend',
     description: 'Add 5 seconds to your own turn timer.',
     opponentDescription: 'They gained 5 extra seconds on their timer.',
     category: 'defensive',
     howItWorks:
       'Instantly extends your current turn timer by 5 seconds. Use it when you need a little more time to find the right word.',
-    example: "You have 3 seconds left and almost have a word. Freeze — your timer extends to 8 seconds.",
+    example: "You have 3 seconds left and almost have a word. Extend — your timer grows to 8 seconds.",
   },
   {
     id: 'secondLife',
     name: 'Second Life',
-    description: 'Resets your turn timer to 25s (10s in Danger Zone). Auto-activates on timeout.',
-    opponentDescription: 'They have a Second Life that will save them from one timeout.',
+    description: 'Manually activate to reset your turn timer to 25s (10s in Danger Zone).',
+    opponentDescription: 'They have a Second Life they can activate to reset their timer.',
     category: 'defensive',
     howItWorks:
-      'Auto-activates if your timer hits zero — you keep playing instead of losing the round. Can also be manually activated anytime to get a fresh 25-second timer.',
-    example: "Your timer hits zero. Second Life kicks in automatically — you get a full 25-second reset.",
+      'Tap to activate on your turn. Resets your timer to a full 25 seconds (or 10s in Danger Zone). Use it before time runs out to keep playing.',
+    example: "You have 4 seconds left. Tap Second Life — your timer resets to 25 seconds.",
   },
   {
     id: 'letterBomb',
     name: 'Letter Bomb',
-    description: "Force opponent's next word to contain Q, X, Z, or J.",
-    opponentDescription: 'Your next word must contain Q, X, Z, or J.',
+    description: 'Force opponent\'s next word to contain any rare letter (Q/X/Z/J/V/K/W/F/H/Y/B).',
+    opponentDescription: 'Your next word must contain any rare letter (Q/X/Z/J/V/K/W/F/H/Y/B).',
     category: 'offensive',
     howItWorks:
-      'A random hard letter (Q, X, Z, or J) is dropped on the opponent. Their next word must contain it, on top of the usual chain rule.',
-    example: "Chain ends in 'on'. Letter Bomb picks X — opponent must play a word starting with 'n' that contains X.",
+      "Opponent's next word must include at least one rare letter from any tier. Tier 1: Q/X/Z/J. Tier 2: V/K/W. Tier 3: F/H/Y/B.",
+    example: "Chain ends in 'on'. Letter Bomb — opponent must play a word starting with 'n' that contains any rare letter.",
   },
   {
     id: 'double',
     name: 'Double',
-    description: 'Your next 3 words each score 2×. Does not stack with Danger Zone.',
-    opponentDescription: 'Their next 3 words will score double points.',
+    description: 'Your next 2 words each score 2×. Does not stack with Danger Zone.',
+    opponentDescription: 'Their next 2 words will score double points.',
     category: 'offensive',
     howItWorks:
-      'Activate on your turn. For each of your next 3 word submissions, the score is doubled. Does not stack with Danger Zone (DZ multiplier takes precedence).',
-    example: 'You play "junction" (9 pts). With Double active, it scores 18 pts. Two more double words to go.',
+      'Activate on your turn. For each of your next 2 word submissions, the score is doubled. Does not stack with Danger Zone (DZ multiplier takes precedence).',
+    example: 'You play "junction" (9 pts). With Double active, it scores 18 pts. One more double word to go.',
   },
   {
     id: 'wild',
@@ -86,7 +86,7 @@ export const POWER_UP_GUIDE: PowerUpGuideEntry[] = [
     category: 'disruption',
     howItWorks:
       "Activate on your turn. Your next word submission ignores the 'must start with X' chain rule. After that word, the chain continues from its last letter as normal.",
-    example: "Chain requires 'qz'. Wild — you play 'magnet' instead, chain now requires 't'.",
+    example: "Chain requires 'z'. Wild — you play 'magnet' instead, chain now requires 't'.",
   },
   {
     id: 'anchor',
@@ -101,12 +101,12 @@ export const POWER_UP_GUIDE: PowerUpGuideEntry[] = [
   {
     id: 'tax',
     name: 'Tax',
-    description: 'Reduce opponent\'s current round score by 10 points (minimum 0).',
-    opponentDescription: "They can cut 10 points from your current round score.",
+    description: 'Reduce opponent\'s current round score by 4 points (minimum 0).',
+    opponentDescription: "They can cut 4 points from your current round score.",
     category: 'offensive',
     howItWorks:
-      "Instant effect. Deducts 10 points from the opponent's current round score, floored at 0. Changes the score gap immediately.",
-    example: "Opponent has 47 round points. Tax — they drop to 37. You're now 10 points closer to the 59-point win gap.",
+      "Instant effect. Deducts 4 points from the opponent's current round score, floored at 0. Changes the score gap immediately.",
+    example: "Opponent has 47 round points. Tax — they drop to 43. You're now 4 points closer to the 59-point win gap.",
   },
 ]
 
@@ -118,7 +118,7 @@ export const CATEGORY_META: Record<PowerUpCategory, { label: string; tagline: st
 
 // Deterministic earning triggers — each trigger always earns one specific power-up.
 export const EARN_TRIGGERS = [
-  { powerup: 'freeze' as PowerUpId, emoji: '❄️', trigger: 'Every 25 points you score', notes: 'Unlimited' },
+  { powerup: 'extend' as PowerUpId, emoji: '⏳', trigger: 'Every 25 points you score', notes: 'Unlimited' },
   { powerup: 'double' as PowerUpId, emoji: '🎯', trigger: '10+ letter word', notes: 'Any time' },
   { powerup: 'letterBomb' as PowerUpId, emoji: '💣', trigger: 'Word contains Q, X, Z, or J', notes: 'Any time' },
   { powerup: 'anchor' as PowerUpId, emoji: '⚓', trigger: '8+ letter word', notes: 'Any time' },

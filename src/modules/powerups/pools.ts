@@ -1,5 +1,5 @@
-// Chain length at which the Danger Zone begins.
-export const DANGER_ZONE_CHAIN_THRESHOLD = 16;
+// Chain length at which the Danger Zone begins (6 words each = 12 total).
+export const DANGER_ZONE_CHAIN_THRESHOLD = 12;
 
 // Score multiplier applied to all words in the Danger Zone.
 export const DANGER_ZONE_MULTIPLIER = 2;

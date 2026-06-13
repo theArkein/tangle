@@ -27,7 +27,7 @@ const MOCK_MATCHES = [
 ]
 
 const MOCK_CHAIN = ['tangent', 'entice', 'iceberg', 'ergot', 'gothic', 'icicle', 'clever']
-const MOCK_MY_INV: Partial<Record<PowerUpId, number>> = { freeze: 2, secondLife: 1, wild: 1 }
+const MOCK_MY_INV: Partial<Record<PowerUpId, number>> = { extend: 2, secondLife: 1, wild: 1 }
 const MOCK_OPP_INV: Partial<Record<PowerUpId, number>> = { letterBomb: 1, double: 2 }
 
 // ─── Header variants ──────────────────────────────────────────────────────────
