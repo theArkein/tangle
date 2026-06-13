@@ -95,6 +95,24 @@ type ServerMsg =
 
 const NEXT_ROUND_SECONDS = 30
 
+const TEST_CHAIN_100 = [
+  'tangle','lethal','alone','never','erase','serum','rummy','mystic',
+  'iconic','iceberg','rgolem','element','eternal','allied','edible',
+  'legend','darkly','lyric','icicle','lemon','onward','define',
+  'enact','actual','almond','dental','almost','stitch','chime',
+  'mellow','owing','ingest','stolen','enough','ghost','thrive',
+  'valley','yeoman','anklet','target','ethics','chosen','energy',
+  'gypsum','margin','insane','nectar','arcade','decide','cello',
+  'lofty','typhon','online','leapt','preach','chrome','melee',
+  'elder','derive','velvet','terror','roving','ingot','obtain',
+  'inward','arden','newt','twitch','chimera','rabbit','biting',
+  'glory','wyvern','noble','endow','witch','chasm','smell',
+  'llama','malted','deluge','gentle','elbow','omega','gavel',
+  'elfish','hidden','denser','reform','format','atoll','llano',
+  'noodle','leaden','dagger','gravel','elvish','shine','nettle',
+  'lunge','geode','denim','nimble',
+]
+
 const MODE_CONFIG: Record<GameMode, { displayName: string; turnSeconds: number }> = {
   duel: { displayName: 'Duel', turnSeconds: 25 },
   classic: { displayName: 'Classic', turnSeconds: 8 },
@@ -245,6 +263,36 @@ function GameContent() {
   const playRef = useRef(play)
   useEffect(() => { playRef.current = play }, [play])
   useEffect(() => { setIsMobile(navigator.maxTouchPoints > 0) }, [])
+
+  // Mock game state for localhost testing (no room parameter)
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.location.hostname !== 'localhost' || roomId) return
+    const P1 = 'test-p1', P2 = 'test-p2'
+    setMyId(P1)
+    setMatchState({
+      status: 'round_active',
+      player1Id: P1,
+      player2Id: P2,
+      roundWins: { [P1]: 1, [P2]: 0 },
+      gameMode: 'duel',
+      currentRound: {
+        roundNumber: 2,
+        seedLetter: 't',
+        chain: TEST_CHAIN_100,
+        currentPlayerId: P1,
+        playerRoundScores: { [P1]: 312, [P2]: 187 },
+        powerUpInventory: {
+          [P1]: { extend: 1, secondLife: 0, letterBomb: 0, double: 1, wild: 0, anchor: 0, tax: 0 },
+          [P2]: { extend: 0, secondLife: 1, letterBomb: 0, double: 0, wild: 0, anchor: 0, tax: 0 },
+        },
+        activeEffects: [],
+        dropTriggers: { playerFreezeThresholds: { [P1]: 10, [P2]: 10 }, playerWordCounts: { [P1]: 0, [P2]: 0 } },
+      },
+    })
+    setGameScores({ [P1]: 1, [P2]: 0 })
+    setDangerZoneEnabled(true)
+  }, [roomId]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (submitting) return
     if (matchState?.currentRound?.currentPlayerId === myId) {
@@ -832,6 +880,8 @@ function GameContent() {
   const opponentInventory: PowerUpInventory = round.powerUpInventory[opponentId] ?? emptyInv
   const inDangerZone = dangerZoneEnabled && round.chain.length >= 12
   inDangerZoneRef.current = inDangerZone
+  const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+  const displayChain = isLocalhost ? TEST_CHAIN_100 : round.chain
   const timerPct = (timeLeft / timerMaxSecs) * 100
   const timerUrgent = timeLeft <= 5 || inDangerZone
   const lastWord = round.chain[round.chain.length - 1]
@@ -887,10 +937,15 @@ function GameContent() {
         </div>
       </div>
 
+      {/* Timer bar */}
+      <div style={{ flexShrink: 0 }}>
+        <TimerBar percent={timerPct} danger={timerUrgent} />
+      </div>
+
       {/* Danger Zone strip */}
       {inDangerZone && (
-        <div style={{ background: 'var(--danger-zone-bg)', borderBottom: '1px solid var(--danger-zone)', padding: '6px 14px', fontSize: '11px', color: 'var(--danger-zone)', textAlign: 'center', flexShrink: 0, fontWeight: 700, letterSpacing: '0.04em' }}>
-          DANGER ZONE — 2× scoring · 10s timer
+        <div style={{ background: 'var(--danger-zone-bg)', borderBottom: '1px solid var(--danger-zone)', padding: '6px 14px', fontSize: '11px', color: 'var(--danger-zone)', textAlign: 'center', flexShrink: 0, fontWeight: 700, letterSpacing: '0.04em', animation: 'dzPulse 2s ease-in-out infinite' }}>
+          ⚠ DANGER ZONE — 2× scoring · 10s timer
         </div>
       )}
 
@@ -912,10 +967,9 @@ function GameContent() {
       {/* ── Players row ── */}
       <div style={{ background: 'var(--n0)', borderBottom: '1px solid var(--n100)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
         {/* Me */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1, minWidth: 0 }}>
-          <div style={{ position: 'relative', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1, minWidth: 0, background: isMyTurn ? 'var(--p1-light)' : 'transparent', borderRadius: 'var(--radius-md)', padding: '4px 6px', transition: 'background 0.2s' }}>
+          <div style={{ position: 'relative', flexShrink: 0, borderRadius: '50%', boxShadow: isMyTurn ? '0 0 0 2px var(--n0), 0 0 0 4px var(--p1)' : 'none', animation: isMyTurn ? 'turnPulseP1 1.6s ease-in-out infinite' : 'none', transition: 'box-shadow 0.2s' }}>
             <Avatar name="You" variant="p1" size={30} />
-            {isMyTurn && <div style={{ position: 'absolute', bottom: -2, right: -2, width: 9, height: 9, borderRadius: '50%', background: 'var(--p1)', border: '2px solid var(--n0)' }} />}
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
             <p style={{ fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n800)', margin: '0 0 2px' }}>
@@ -962,7 +1016,7 @@ function GameContent() {
         </div>
 
         {/* Opponent */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1, justifyContent: 'flex-end', minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1, justifyContent: 'flex-end', minWidth: 0, background: !isMyTurn ? 'var(--p2-light)' : 'transparent', borderRadius: 'var(--radius-md)', padding: '4px 6px', transition: 'background 0.2s' }}>
           <div style={{ minWidth: 0, flex: 1, textAlign: 'right' }}>
             <p style={{ fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-heading)', color: 'var(--n800)', margin: '0 0 2px' }}>
               {!isMyTurn && <span style={{ color: 'var(--p2)', fontWeight: 500 }}>thinking… · </span>}{opponentName}
@@ -978,9 +1032,8 @@ function GameContent() {
               </div>
             )}
           </div>
-          <div style={{ position: 'relative', flexShrink: 0 }}>
+          <div style={{ position: 'relative', flexShrink: 0, borderRadius: '50%', boxShadow: !isMyTurn ? '0 0 0 2px var(--n0), 0 0 0 4px var(--p2)' : 'none', animation: !isMyTurn ? 'turnPulseP2 1.6s ease-in-out infinite' : 'none', transition: 'box-shadow 0.2s' }}>
             <Avatar name="?" variant="p2" size={30} />
-            {!isMyTurn && <div style={{ position: 'absolute', bottom: -2, right: -2, width: 9, height: 9, borderRadius: '50%', background: 'var(--p2)', border: '2px solid var(--n0)' }} />}
           </div>
         </div>
       </div>
@@ -1020,17 +1073,64 @@ function GameContent() {
         </div>
       </div>
 
-      {/* ── Word chain + floating reaction FAB ── */}
-      <div style={{ flex: 1, padding: `12px 16px ${gameMode === 'duel' ? 52 : 12}px`, display: 'flex', flexWrap: 'wrap', gap: 6, alignContent: 'flex-start', overflow: 'hidden', position: 'relative' }}>
-        {round.chain.length === 0 ? (
-          <div style={{ width: '100%', textAlign: 'center', paddingTop: 20 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--n400)', marginBottom: 6 }}>Start with</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, color: 'var(--n900)' }}>{round.seedLetter.toUpperCase()}</div>
+      {/* ── Board: the word-chain surface, a distinct panel floating on the page ── */}
+      <div style={{
+        flex: 1,
+        minHeight: 0,
+        margin: '8px 10px',
+        position: 'relative',
+        display: 'flex',
+        background: 'var(--n0)',
+        border: '1px solid var(--n200)',
+        borderRadius: 'var(--radius-xl)',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+        overflow: 'hidden',
+      }}>
+
+      {/* Word chain + floating reaction FAB */}
+      <div style={{
+        flex: 1,
+        minHeight: 0,
+        padding: `12px 16px ${gameMode === 'duel' ? 52 : 12}px`,
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 6,
+        alignContent: displayChain.length === 0 ? 'flex-start' : 'flex-end',
+        overflow: 'hidden',
+        position: 'relative',
+        // When the chain is long enough to clip, fade the top edge to signal older words above.
+        maskImage: displayChain.length > 0 ? 'linear-gradient(to bottom, transparent 0, #000 28px)' : undefined,
+        WebkitMaskImage: displayChain.length > 0 ? 'linear-gradient(to bottom, transparent 0, #000 28px)' : undefined,
+      }}>
+        {displayChain.length === 0 ? (
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 24, gap: 12 }}>
+            {/* Whose move */}
+            <div style={{ fontSize: 16, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: isMyTurn ? 'var(--p1)' : 'var(--p2)' }}>
+              {isMyTurn ? 'Your move' : `${opponentName}’s move`}
+            </div>
+            {/* Seed letter tile — colored by active player */}
+            <div style={{
+              width: 52, height: 52, borderRadius: 'var(--radius-lg)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: isMyTurn ? 'var(--p1-light)' : 'var(--p2-light)',
+              color: isMyTurn ? 'var(--p1)' : 'var(--p2)',
+              fontFamily: 'var(--font-display)', fontSize: 32, lineHeight: 1,
+              boxShadow: isMyTurn ? '0 0 0 2px var(--p1)' : '0 0 0 2px var(--p2)',
+              animation: 'seedPop 0.3s ease-out',
+            }}>
+              {round.seedLetter.toUpperCase()}
+            </div>
+            {/* Action prompt */}
+            <div style={{ fontSize: 13, color: 'var(--n500)', fontFamily: 'var(--font-body)', textAlign: 'center', maxWidth: 220 }}>
+              {isMyTurn
+                ? <>Open the chain with a word starting with <strong style={{ color: 'var(--n800)' }}>{round.seedLetter.toUpperCase()}</strong></>
+                : <>Waiting for {opponentName} to open the chain…</>}
+            </div>
           </div>
         ) : (
           <>
-            {round.chain.slice(-8).map((word, i, arr) => {
-              const absIdx = round.chain.length - arr.length + i
+            {displayChain.slice(-50).map((word, i, arr) => {
+              const absIdx = displayChain.length - arr.length + i
               const isOwn = matchState.player1Id === myId ? absIdx % 2 === 0 : absIdx % 2 !== 0
               return (
                 <WordPill key={absIdx} word={word} variant={isOwn ? 'player1' : 'player2'} size="sm" />
@@ -1131,16 +1231,16 @@ function GameContent() {
           @keyframes activateFlash { 0% { background: var(--accent-warm-faint); } 50% { background: #ffe09a; } 100% { background: var(--n0); } }
           @keyframes urgentPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(234,179,8,0.8); } 50% { box-shadow: 0 0 0 6px rgba(234,179,8,0); } }
           @keyframes powerFloat { 0% { opacity: 0; transform: translateY(0); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-36px); } }
+          @keyframes dzPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.65; } }
+          @keyframes turnPulseP1 { 0%,100% { box-shadow: 0 0 0 2px var(--n0), 0 0 0 4px var(--p1); } 50% { box-shadow: 0 0 0 2px var(--n0), 0 0 0 4px var(--p1), 0 0 0 8px var(--p1-light); } }
+          @keyframes turnPulseP2 { 0%,100% { box-shadow: 0 0 0 2px var(--n0), 0 0 0 4px var(--p2); } 50% { box-shadow: 0 0 0 2px var(--n0), 0 0 0 4px var(--p2), 0 0 0 8px var(--p2-light); } }
+          @keyframes seedPop { 0% { transform: scale(0.85); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
         `}</style>
+      </div>
       </div>
 
       {/* ── Bottom panel ── */}
-      <div style={{ background: 'var(--n0)', borderTop: `3px solid ${isMyTurn ? 'var(--p1)' : inDangerZone ? 'var(--danger-zone)' : 'var(--n200)'}`, padding: '10px 14px 20px', flexShrink: 0 }}>
-
-        {/* Timer */}
-        <div style={{ marginBottom: 10 }}>
-          <TimerBar percent={timerPct} danger={timerUrgent} />
-        </div>
+      <div style={{ background: 'var(--n0)', borderTop: '1px solid var(--n200)', padding: '10px 14px 20px', flexShrink: 0 }}>
 
         {/* Opponent effect bar — shown when an active effect targets me */}
         {isMyTurn && round.activeEffects.some(e => (e.kind === 'letterBomb' && e.onPlayerId === myId) || (e.kind === 'anchor' && e.onPlayerId === myId)) && (
@@ -1159,7 +1259,7 @@ function GameContent() {
           ) : (
             <span style={{ fontSize: 12, color: 'var(--n400)', fontFamily: 'var(--font-body)' }}>Waiting for opponent…</span>
           )}
-          <span style={{ fontSize: 11, color: 'var(--n400)', fontFamily: 'var(--font-mono)' }}>{round.chain.length} words</span>
+          <span style={{ fontSize: 11, color: 'var(--n400)', fontFamily: 'var(--font-mono)' }}>{displayChain.length} words</span>
         </div>
 
         {/* Input row */}
@@ -1222,7 +1322,9 @@ function GameContent() {
               <Button variant="primary" size="lg" full onClick={sendNextRoundRequest} disabled={iConfirmed}>
                 {iConfirmed ? 'Ready ✓' : 'Play Again'}
               </Button>
-              <Button variant="secondary" size="lg" full onClick={() => { window.location.href = '/' }}>Back to Lobby</Button>
+              <div style={{ marginTop: '8px' }}>
+                <Button variant="secondary" size="lg" full onClick={() => { window.location.href = '/' }}>Back to Lobby</Button>
+              </div>
               <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--n500)' }}>
                 {opponentConfirmed ? 'Opponent is ready' : 'Waiting on opponent…'}
                 <span style={{ marginLeft: '8px', fontFamily: 'var(--font-mono)', color: nextRoundTimeLeft <= 5 ? 'var(--danger)' : 'var(--n400)' }}>

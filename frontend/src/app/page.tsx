@@ -210,7 +210,11 @@ export default function LobbyPage() {
               >
                 {muted ? '🔇' : '🔊'}
               </button>
-              {player && <Avatar name={player.display_name} variant="p1" size={38} />}
+              {player && (
+                <Link href="/profile" style={{ textDecoration: 'none', display: 'flex', borderRadius: '50%', lineHeight: 1 }}>
+                  <Avatar name={player.display_name} variant="p1" size={38} />
+                </Link>
+              )}
             </div>
           </div>
 
@@ -219,7 +223,7 @@ export default function LobbyPage() {
             {[
               { label: 'ELO', value: player ? String(player.elo) : '—' },
               { label: 'Wins', value: wins !== null ? String(wins) : '—' },
-              { label: 'Streak', value: '🔥' },
+              { label: 'Games', value: recentMatches !== null ? String(recentMatches.length) : '—' },
             ].map(s => (
               <div key={s.label} style={{ flex: 1, background: 'var(--n0)', border: '1px solid var(--n200)', borderRadius: 'var(--radius-lg)', padding: '10px 12px', textAlign: 'center' }}>
                 <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--n900)', lineHeight: 1 }}>{s.value}</div>
