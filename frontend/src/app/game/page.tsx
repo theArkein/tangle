@@ -110,7 +110,103 @@ const TEST_CHAIN_100 = [
   'llama','malted','deluge','gentle','elbow','omega','gavel',
   'elfish','hidden','denser','reform','format','atoll','llano',
   'noodle','leaden','dagger','gravel','elvish','shine','nettle',
-  'lunge','geode','denim','nimble',
+  'lunge','geode','denim','nimble','abolish','harbor','rabbit',
+  'tacos','stealth','handle','effort','typical','kayak','kindle',
+  'expert','tribal','listen','tuxedo','oxygen','yellow','eggplant',
+  'thread','declare','engine','ending','gotten','tenant','terrific',
+  'cable','elf','fallen','nature','energy','yacht','taxicab',
+  'bulge','engine','explore','expert','extend','effect','erase',
+  'finish','friend','forest','forget','format','frozen','galaxy',
+  'gather','gentle','global','glance','golden','govern','gravel',
+  'gravity','ground','growth','guided','guitar','handle','happen',
+  'harbor','harden','health','heaven','hidden','higher','honest',
+  'horror','humble','hungry','hurdle','hybrid','ignore','impact',
+  'import','income','inform','inject','injury','insect','insert',
+  'inside','intent','invoke','island','jacket','jingle','juggle',
+  'jungle','kernel','kettle','kidnap','kindle','knight','ladder',
+  'ladies','landed','laptop','lately','latest','leader','league',
+  'leaked','learn','legacy','legend','length','lesson','letter',
+  'liable','liberty','lifted','lights','likely','listen','little',
+  'living','locate','locked','london','longer','looked','losing',
+  'louder','loving','lovely','lowest','luxury','machine','madness',
+  'magnet','maiden','mainly','making','manage','manner','manual',
+  'marble','margin','marked','market','marvel','master','matter',
+  'meadow','median','medium','melody','member','memory','mental',
+  'mentor','merger','merely','method','middle','mighty','minute',
+  'mirror','misery','missed','mobile','modern','modest','moment',
+  'monkey','monster','monthly','mortal','mostly','mother','motion',
+  'moving','murder','muscle','museum','mutual','mystery','myself',
+  'naming','narrow','nation','native','nature','nearby','nearly',
+  'nearly','nectar','needed','needle','nephew','nerves','nested',
+  'neural','newest','nickel','nights','nobody','normal','notice',
+  'notion','number','nurse','object','oblate','obtain','obvious',
+  'occupy','occurs','ocean','office','offset','online','operate',
+  'opines','option','oracle','orange','orchard','orders','organs',
+  'origin','others','outfit','output','output','outrage','owning',
+  'oxygen','oyster','packed','paddle','pained','paired','palace',
+  'panels','parent','parish','parks','parrot','partly','passed',
+  'patent','patrol','patron','paused','paving','paying','peace',
+  'peaker','pearl','pebble','pedal','pencil','penny','people',
+  'pepper','perfect','perform','perhaps','period','permit','person',
+  'peruse','petals','phrase','picked','picnic','picture','pierce',
+  'pigeon','pigment','pillage','pillow','pinned','pirate','pistol',
+  'pitcher','placed','plague','placed','planet','plants','plastic',
+  'plates','played','player','plaza','please','pledge','plenty',
+  'plight','pliers','plight','plowed','plunge','pocket','poem',
+  'poetry','pointed','poison','policy','polish','polite','pompous',
+  'ponies','pooled','poorer','poorly','popped','popular','porch',
+  'portal','porter','posed','posse','postal','posted','potato',
+  'potent','potion','potter','pounds','poured','poverty','powder',
+  'power','praise','prayed','prayer','preach','precedes','precise',
+  'preface','prefer','prefix','prepay','present','pretend','pretty',
+  'prevail','prevent','preview','previous','preying','priced','pried',
+  'priest','primes','prince','print','prison','private','probable',
+  'problem','proceed','process','produce','product','profane','profile',
+  'profits','program','project','promise','promote','prompt','prompt',
+  'prone','proof','proper','propose','protect','protest','proving',
+  'provoke','prowess','prowl','public','pulled','pulley','pulped',
+  'pulsed','pumped','punched','punish','puppet','pupils','purchase',
+  'purged','purify','purple','purpose','pursued','pushing','puzzle',
+  'pyramid','quaint','quaked','quarry','quarter','quarts','quartz',
+  'quashed','queasy','queens','queries','quest','question','queue',
+  'quiche','quick','quiet','quilts','quirks','quiz','quoted',
+  'quotes','rabbid','rabbit','rabies','raced','racket','radial',
+  'radiant','radical','radius','rafted','ragged','raider','railed',
+  'rained','raised','raisins','raking','rallied','rammed','rampage',
+  'rampant','ramps','random','ranged','ranger','ranked','ransack',
+  'ranted','rapids','rarest','rarity','rasped','rather','ratify',
+  'rating','rattle','ravage','raveled','ravine','ravings','ravish',
+  'razors','reached','reacted','reactor','readers','readily','realism',
+  'reality','realms','reaped','reaper','rearing','reason','rebate',
+  'rebuild','rebuke','recall','recant','recap','recedes','receipt',
+  'receive','recent','recess','recipe','recited','recite','reckless',
+  'reckon','recline','recluse','recoil','record','records','recount',
+  'recover','recruit','rectify','recycle','redeem','reeked','reeled',
+  'reeves','refect','refill','refine','refire','reflex','reflux',
+  'reform','refrain','refund','refusal','regain','regal','regime',
+  'region','register','regress','regret','regular','rehash','rehire',
+  'reigns','reimpose','reindeer','reinvent','reject','rejoice','rejoin',
+  'rejuvenate','relapse','relate','relaxed','relayed','release','relent',
+  'reliant','relic','relief','relieve','religion','relish','relive',
+  'reload','relocate','reluctant','remain','remark','remedy','remember',
+  'remind','remise','remiss','remit','remnant','remodel','remorse',
+  'remote','removal','remove','render','renege','renew','renown',
+  'rental','repair','repast','repay','repeal','repeat','repel',
+  'repent','replace','replete','replica','replied','report','repose',
+  'reprise','reprobe','reproof','reprove','repulse','repute','request',
+  'require','requite','rescind','rescue','reseal','research','resemble',
+  'resent','reserve','reside','residue','resign','resilience','resin',
+  'resist','resolve','resonate','resound','resource','respect','respire',
+  'respite','respond','response','rest','restful','restitution','restive',
+  'restore','restrain','restrict','result','resume','resurge','resurrect',
+  'retail','retain','retard','retch','rethink','reticent','retina',
+  'retire','retort','retrace','retract','retreat','retrieve','return',
+  'reunite','reuse','reveal','revel','revenge','revenue','reverb',
+  'revere','reverse','revert','review','revile','revise','revisit',
+  'revive','revoke','revolved','revolver','revue','revulsion','reward',
+  'reword','rework','rhetoric','rhino','rhythm','ribbon','riches',
+  'rickets','rickety','ricochet','riddance','riddle','ridden','riddle',
+  'riding','rife','riffle','rifle','rift','rigged','rigger',
 ]
 
 const MODE_CONFIG: Record<GameMode, { displayName: string; turnSeconds: number }> = {
@@ -213,7 +309,8 @@ function PowerUpTooltip({ id, description, children, onActivate, disabled }: { i
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const S = {
-  page: { display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', maxWidth: '100vw', overscrollBehavior: 'none', background: 'var(--n50)', color: 'var(--n800)' } as React.CSSProperties,
+  shell: { display: 'flex', justifyContent: 'center', alignItems: 'stretch', height: '100dvh', width: '100%', overflow: 'hidden', overscrollBehavior: 'none' } as React.CSSProperties,
+  page: { display: 'flex', flexDirection: 'column', height: '100%', width: '100%', position: 'relative', overflow: 'hidden', overscrollBehavior: 'none', background: 'var(--n50)', color: 'var(--n800)' } as React.CSSProperties,
   centeredFull: { display: 'flex', flexDirection: 'column', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '20px', textAlign: 'center' } as React.CSSProperties,
   header: { background: 'var(--n0)', borderBottom: '1px solid var(--n200)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px' } as React.CSSProperties,
   scoreText: { fontSize: '18px', fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--n800)' } as React.CSSProperties,
@@ -228,6 +325,7 @@ function GameContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const roomId = searchParams.get('room') ?? ''
+  const devMode = searchParams.get('mode') === 'dev'
 
   const [myId, setMyId] = useState<string | null>(null)
   const [googleLinked, setGoogleLinked] = useState(false)
@@ -250,7 +348,7 @@ function GameContent() {
   const [oppHighlights, setOppHighlights] = useState<Partial<Record<PowerUpId, 'earned' | 'activated'>>>({})
   const [reactionFeed, setReactionFeed] = useState<Array<{ id: number; emoji: string; byMe: boolean }>>([])
   const [forfeitedBy, setForfeitedBy] = useState<string | null>(null)
-  const [powerFloats, setPowerFloats] = useState<Array<{ id: number; emoji: string; side: 'mine' | 'opp' }>>([])
+  const [powerFloats, setPowerFloats] = useState<Array<{ id: number; emoji: string; side: 'mine' | 'opp'; x: number | null; y: number | null }>>([])
   const powerFloatIdRef = useRef(0)
 
   const [isMobile, setIsMobile] = useState(false)
@@ -258,15 +356,19 @@ function GameContent() {
   const [activeToast, setActiveToast] = useState<{ id: number; variant: ToastVariant; subText?: string; title?: string } | null>(null)
   const toastIdRef = useRef(0)
   const [reactionsOpen, setReactionsOpen] = useState(false)
+  // When a round ends, the user can temporarily hide the results modal to review the final chain
+  const [resultsHidden, setResultsHidden] = useState(false)
 
   const { play, muted, setMuted } = useSoundEngine()
   const playRef = useRef(play)
   useEffect(() => { playRef.current = play }, [play])
+  // Always show the results modal afresh when a round ends or a new round starts
+  useEffect(() => { setResultsHidden(false) }, [matchState?.status, matchState?.currentRound?.roundNumber])
   useEffect(() => { setIsMobile(navigator.maxTouchPoints > 0) }, [])
 
-  // Mock game state for localhost testing (no room parameter)
+  // Mock game state for dev testing — enable with ?mode=dev (no room parameter)
   useEffect(() => {
-    if (typeof window === 'undefined' || window.location.hostname !== 'localhost' || roomId) return
+    if (typeof window === 'undefined' || !devMode || roomId) return
     const P1 = 'test-p1', P2 = 'test-p2'
     setMyId(P1)
     setMatchState({
@@ -282,16 +384,18 @@ function GameContent() {
         currentPlayerId: P1,
         playerRoundScores: { [P1]: 312, [P2]: 187 },
         powerUpInventory: {
-          [P1]: { extend: 1, secondLife: 0, letterBomb: 0, double: 1, wild: 0, anchor: 0, tax: 0 },
-          [P2]: { extend: 0, secondLife: 1, letterBomb: 0, double: 0, wild: 0, anchor: 0, tax: 0 },
+          [P1]: { extend: 2, secondLife: 1, letterBomb: 1, double: 1, wild: 1, anchor: 1, tax: 0 },
+          [P2]: { extend: 1, secondLife: 1, letterBomb: 0, double: 2, wild: 0, anchor: 1, tax: 1 },
         },
-        activeEffects: [],
+        activeEffects: [
+          { kind: 'letterBomb', onPlayerId: P1, anyRareLetter: true },
+        ],
         dropTriggers: { playerFreezeThresholds: { [P1]: 10, [P2]: 10 }, playerWordCounts: { [P1]: 0, [P2]: 0 } },
       },
     })
     setGameScores({ [P1]: 1, [P2]: 0 })
     setDangerZoneEnabled(true)
-  }, [roomId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [roomId, devMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (submitting) return
@@ -404,8 +508,19 @@ function GameContent() {
         setTimeout(() => setter(h => { const n = { ...h }; delete n[msg.powerup]; return n }), 1500)
         const pLabel = POWER_UP_LABELS[msg.powerup]
         const fid = ++powerFloatIdRef.current
-        setPowerFloats(prev => [...prev, { id: fid, emoji: pLabel?.emoji ?? '', side: isMe ? 'mine' : 'opp' }])
-        setTimeout(() => setPowerFloats(prev => prev.filter(f => f.id !== fid)), 1500)
+        const side: 'mine' | 'opp' = isMe ? 'mine' : 'opp'
+        // Each player's float rises from their own top inventory icon for that power-up
+        const anchorEl = isMe
+          ? document.querySelector(`[data-float="top-mine-${msg.powerup}"]`)
+          : document.querySelector(`[data-float="opp-${msg.powerup}"]`)
+        let fx: number | null = null, fy: number | null = null
+        if (anchorEl) {
+          const r = anchorEl.getBoundingClientRect()
+          fx = r.left + r.width / 2
+          fy = r.bottom
+        }
+        setPowerFloats(prev => [...prev, { id: fid, emoji: pLabel?.emoji ?? '', side, x: fx, y: fy }])
+        setTimeout(() => setPowerFloats(prev => prev.filter(f => f.id !== fid)), 1100)
         playRef.current(isMe ? 'power_earned' : 'opp_turn')
         return
       }
@@ -415,8 +530,9 @@ function GameContent() {
         const setter = isMe ? setMyHighlights : setOppHighlights
         setter(h => ({ ...h, [msg.powerup]: 'activated' }))
         setTimeout(() => setter(h => { const n = { ...h }; delete n[msg.powerup]; return n }), 1000)
-        // Only toast when I'm the target (opponent used something on me)
-        if (!isMe && msg.targetPlayerId === myId) {
+        // Only toast when I'm the target (opponent used something on me).
+        // letterBomb/anchor are surfaced by the persistent effect bar, so skip the toast for those.
+        if (!isMe && msg.targetPlayerId === myId && msg.powerup !== 'letterBomb' && msg.powerup !== 'anchor') {
           const pLabel2 = POWER_UP_LABELS[msg.powerup]
           setActiveToast({ id: ++toastIdRef.current, variant: 'error', title: `${pLabel2?.emoji ?? ''} ${pLabel2?.name ?? msg.powerup}` })
         }
@@ -532,11 +648,11 @@ function GameContent() {
     return () => clearInterval(id)
   }, [matchState?.status])
 
-  // Auto-scroll chain to the latest word whenever chain grows
+  // Auto-scroll chain to the latest word (bottom) whenever chain grows
   useEffect(() => {
     const el = chainScrollRef.current
     if (!el) return
-    el.scrollTo({ left: el.scrollWidth, behavior: 'smooth' })
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }, [matchState?.currentRound?.chain.length])
 
   // Sound: turn change
@@ -870,7 +986,7 @@ function GameContent() {
     )
   }
 
-  const isMyTurn = round.currentPlayerId === myId
+  const isMyTurn = matchState.status === 'round_active' && round.currentPlayerId === myId
   const opponentId = matchState.player1Id === myId ? matchState.player2Id : matchState.player1Id
   const opponentName = opponentId === 'bot' ? 'Bot' : 'Opponent'
   const gameMode: GameMode = matchState.gameMode ?? 'duel'
@@ -880,8 +996,7 @@ function GameContent() {
   const opponentInventory: PowerUpInventory = round.powerUpInventory[opponentId] ?? emptyInv
   const inDangerZone = dangerZoneEnabled && round.chain.length >= 12
   inDangerZoneRef.current = inDangerZone
-  const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-  const displayChain = isLocalhost ? TEST_CHAIN_100 : round.chain
+  const displayChain = devMode ? TEST_CHAIN_100 : round.chain
   const timerPct = (timeLeft / timerMaxSecs) * 100
   const timerUrgent = timeLeft <= 5 || inDangerZone
   const lastWord = round.chain[round.chain.length - 1]
@@ -905,7 +1020,7 @@ function GameContent() {
   })
 
   const myEffectChips: string[] = round.activeEffects.flatMap(e => {
-    if (e.kind === 'letterBomb'  && e.onPlayerId === myId)    return ['💣 rare']
+    // letterBomb constraint on me is surfaced by the full-width effect bar — no duplicate chip
     if (e.kind === 'anchor'      && e.onPlayerId === myId)    return [`⚓ ≥${e.minLength}`]
     if (e.kind === 'doubleScore' && e.forPlayerId === myId)   return [`🎯 ${e.wordsRemaining}W`]
     if (e.kind === 'wildPending' && e.forPlayerId === myId)   return ['🃏 Wild']
@@ -913,11 +1028,12 @@ function GameContent() {
   })
 
   return (
+    <div className="game-shell" style={S.shell}>
     <div id="game-root" style={S.page}>
       {/* Mute toggle */}
       <button
         onClick={() => setMuted(!muted)}
-        style={{ position: 'fixed', top: 8, right: 8, zIndex: 70, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: '4px', lineHeight: 1, color: 'var(--n400)', opacity: 0.7 }}
+        style={{ position: 'absolute', top: 8, right: 8, zIndex: 70, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: '4px', lineHeight: 1, color: 'var(--n400)', opacity: 0.7 }}
         title={muted ? 'Unmute' : 'Mute'}
         aria-label={muted ? 'Unmute sounds' : 'Mute sounds'}
       >
@@ -925,7 +1041,7 @@ function GameContent() {
       </button>
 
       {/* Game header */}
-      <div style={{ background: 'var(--n0)', borderBottom: '1px solid var(--n200)', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+      <div style={{ background: 'var(--n50)', borderBottom: '1px solid var(--n200)', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
         <button
           onClick={() => { window.location.href = '/' }}
           style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: 'var(--n400)', padding: '4px', lineHeight: 1 }}
@@ -965,7 +1081,7 @@ function GameContent() {
       )}
 
       {/* ── Players row ── */}
-      <div style={{ background: 'var(--n0)', borderBottom: '1px solid var(--n100)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+      <div style={{ background: 'var(--n50)', borderBottom: '1px solid var(--n100)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
         {/* Me */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1, minWidth: 0, background: isMyTurn ? 'var(--p1-light)' : 'transparent', borderRadius: 'var(--radius-md)', padding: '4px 6px', transition: 'background 0.2s' }}>
           <div style={{ position: 'relative', flexShrink: 0, borderRadius: '50%', boxShadow: isMyTurn ? '0 0 0 2px var(--n0), 0 0 0 4px var(--p1)' : 'none', animation: isMyTurn ? 'turnPulseP1 1.6s ease-in-out infinite' : 'none', transition: 'box-shadow 0.2s' }}>
@@ -1004,7 +1120,7 @@ function GameContent() {
           {/* Score gap — Duel mode */}
           {showScoreGap && (
             <div style={{
-              fontSize: 11,
+              fontSize: 14,
               fontFamily: 'var(--font-mono)',
               fontWeight: 700,
               marginTop: 2,
@@ -1040,32 +1156,36 @@ function GameContent() {
 
       {/* ── Power-ups row ── */}
       <div style={{ background: 'var(--n50, #f9fafb)', borderBottom: '1px solid var(--n100)', padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        <div style={{ display: 'flex', gap: 4, flex: 1, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 3, flex: 1, flexWrap: 'nowrap', minWidth: 0 }}>
           {(Object.keys(POWER_UP_LABELS) as PowerUpId[]).map(id => {
             const count = myInventory[id] ?? 0
             const hl = myHighlights[id]
             return (
               <PowerUpTooltip key={id} id={id} description={POWER_DESC[id].own}>
                 <span
-                  style={{ fontSize: 11, opacity: count > 0 ? 1 : 0.15, lineHeight: 1.2, position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 1, padding: '1px 2px', animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
+                  className="pwr-top"
+                  data-float={`top-mine-${id}`}
+                  style={{ fontSize: 13, opacity: count > 0 ? 1 : 0.15, lineHeight: 1.2, position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 1, padding: '1px 2px', animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
                   {POWER_UP_LABELS[id].emoji}
-                  {count > 0 && <span style={{ fontSize: 7, fontFamily: 'var(--font-mono)', color: 'var(--p1)', fontWeight: 700, lineHeight: 1 }}>{count}</span>}
+                  {count > 0 && <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--p1)', fontWeight: 700, lineHeight: 1 }}>{count}</span>}
                 </span>
               </PowerUpTooltip>
             )
           })}
         </div>
         <span style={{ fontSize: 9, color: 'var(--n300)', fontFamily: 'var(--font-mono)', fontWeight: 600, flexShrink: 0 }}>PWR</span>
-        <div style={{ display: 'flex', gap: 4, flex: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: 3, flex: 1, flexWrap: 'nowrap', minWidth: 0, justifyContent: 'flex-end' }}>
           {(Object.keys(POWER_UP_LABELS) as PowerUpId[]).map(id => {
             const count = opponentInventory[id] ?? 0
             const hl = oppHighlights[id]
             return (
               <PowerUpTooltip key={id} id={id} description={POWER_DESC[id].opp}>
                 <span
-                  style={{ fontSize: 11, opacity: count > 0 ? 1 : 0.15, lineHeight: 1.2, position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 1, padding: '1px 2px', animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
+                  className="pwr-top"
+                  data-float={`opp-${id}`}
+                  style={{ fontSize: 13, opacity: count > 0 ? 1 : 0.15, lineHeight: 1.2, position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 1, padding: '1px 2px', animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : 'none' }}>
                   {POWER_UP_LABELS[id].emoji}
-                  {count > 0 && <span style={{ fontSize: 7, fontFamily: 'var(--font-mono)', color: 'var(--p2)', fontWeight: 700, lineHeight: 1 }}>{count}</span>}
+                  {count > 0 && <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--p2)', fontWeight: 700, lineHeight: 1 }}>{count}</span>}
                 </span>
               </PowerUpTooltip>
             )
@@ -1080,7 +1200,7 @@ function GameContent() {
         margin: '8px 10px',
         position: 'relative',
         display: 'flex',
-        background: 'var(--n0)',
+        background: 'var(--n50)',
         border: '1px solid var(--n200)',
         borderRadius: 'var(--radius-xl)',
         boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
@@ -1091,16 +1211,21 @@ function GameContent() {
       <div style={{
         flex: 1,
         minHeight: 0,
-        padding: `12px 16px ${gameMode === 'duel' ? 52 : 12}px`,
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: 6,
-        alignContent: displayChain.length === 0 ? 'flex-start' : 'flex-end',
-        overflow: 'hidden',
         position: 'relative',
-        // When the chain is long enough to clip, fade the top edge to signal older words above.
-        maskImage: displayChain.length > 0 ? 'linear-gradient(to bottom, transparent 0, #000 28px)' : undefined,
-        WebkitMaskImage: displayChain.length > 0 ? 'linear-gradient(to bottom, transparent 0, #000 28px)' : undefined,
+        display: 'flex',
+        overflow: 'hidden',
+      }}>
+      {/* Scrollable word list — fixed height, holds the full chain */}
+      <div ref={chainScrollRef} data-scroll="chain" style={{
+        flex: 1,
+        minHeight: 0,
+        padding: '12px 16px',
+        display: 'flex',
+        flexDirection: 'column',
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        overscrollBehavior: 'contain',
+        scrollBehavior: 'smooth',
       }}>
         {displayChain.length === 0 ? (
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 24, gap: 12 }}>
@@ -1128,12 +1253,11 @@ function GameContent() {
             </div>
           </div>
         ) : (
-          <>
-            {displayChain.slice(-50).map((word, i, arr) => {
-              const absIdx = displayChain.length - arr.length + i
-              const isOwn = matchState.player1Id === myId ? absIdx % 2 === 0 : absIdx % 2 !== 0
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignContent: 'flex-end', marginTop: 'auto' }}>
+            {displayChain.map((word, i) => {
+              const isOwn = matchState.player1Id === myId ? i % 2 === 0 : i % 2 !== 0
               return (
-                <WordPill key={absIdx} word={word} variant={isOwn ? 'player1' : 'player2'} size="sm" />
+                <WordPill key={i} word={word} variant={isOwn ? 'player1' : 'player2'} size="sm" />
               )
             })}
             {!isMyTurn && (
@@ -1141,11 +1265,13 @@ function GameContent() {
                 {nextSeed.toLowerCase()}<span style={{ animation: 'blink 1s step-end infinite', opacity: 0.5 }}>|</span>
               </span>
             )}
-          </>
+          </div>
         )}
+        </div>
+
 
         {/* Floating reaction FAB */}
-        <div style={{ position: 'absolute', bottom: gameMode === 'duel' ? 58 : 10, right: 14, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+        <div style={{ position: 'absolute', bottom: 10, right: 14, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
           {reactionsOpen && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, background: 'var(--n0)', border: '1px solid var(--n200)', borderRadius: 'var(--radius-xl)', padding: '6px 4px', boxShadow: '0 4px 16px rgba(0,0,0,0.10)' }}>
               {REACTION_OPTIONS.map(r => (
@@ -1162,29 +1288,7 @@ function GameContent() {
           </button>
         </div>
 
-        {/* Powers strip — duel mode, always visible at bottom of chain area */}
-        {gameMode === 'duel' && (
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'var(--n0)', borderTop: '1px solid var(--n100)', padding: '6px 10px', display: 'flex', gap: 4, alignItems: 'center', overflowX: 'auto', msOverflowStyle: 'none' } as React.CSSProperties}>
-            {(Object.keys(POWER_UP_LABELS) as PowerUpId[]).map(id => {
-              const count = myInventory[id] ?? 0
-              const earned = count > 0
-              // secondLife and extend can be used anytime (affect your own timer); all others require your turn
-              const turnLocked = !isMyTurn && id !== 'secondLife' && id !== 'extend'
-              const hl = myHighlights[id]
-              return (
-                <PowerUpTooltip key={id} id={id} description={POWER_DESC[id].own} onActivate={earned && !turnLocked ? () => activatePowerUp(id) : () => {}} disabled={!earned || turnLocked}>
-                  <span
-                    style={{ position: 'relative', display: 'inline-flex', padding: '2px 3px', cursor: earned && !turnLocked ? 'pointer' : 'default', opacity: earned ? (turnLocked ? 0.5 : 1) : 0.2, filter: earned ? 'none' : 'grayscale(1)', flexShrink: 0, borderRadius: 6, animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : (id === 'secondLife' && isMyTurn && timeLeft <= 8 && count > 0) ? 'urgentPulse 0.8s ease-in-out infinite' : 'none' }}>
-                    <span style={{ fontSize: 22, lineHeight: 1 }}>{POWER_UP_LABELS[id].emoji}</span>
-                    {earned && (
-                      <span style={{ position: 'absolute', top: 0, right: 0, fontSize: 8, fontFamily: 'var(--font-mono)', background: 'var(--p1)', color: 'var(--n0)', borderRadius: '99px', padding: '1px 3px', fontWeight: 700, lineHeight: 1 }}>×{count}</span>
-                    )}
-                  </span>
-                </PowerUpTooltip>
-              )
-            })}
-          </div>
-        )}
+        {/* My power-up strip moved to the input area (see bottom panel) */}
 
         {/* Floating reactions feed */}
         {reactionFeed.length > 0 && (
@@ -1197,12 +1301,22 @@ function GameContent() {
 
         {/* Power floats — rise from power icon columns on earn */}
         {powerFloats.length > 0 && (
-          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 5 }}>
-            {powerFloats.map(f => (
-              <div key={f.id} style={{ position: 'absolute', bottom: gameMode === 'duel' ? 56 : 12, [f.side === 'mine' ? 'left' : 'right']: '15%', fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono)', color: f.side === 'mine' ? 'var(--p1)' : 'var(--p2)', animation: 'powerFloat 1.5s ease-out forwards', whiteSpace: 'nowrap' }}>
-                +1 {f.emoji}
-              </div>
-            ))}
+          <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 80 }}>
+            {powerFloats.map(f => {
+              const color = f.side === 'mine' ? 'var(--p1)' : 'var(--p2)'
+              const left = f.x ?? (typeof window !== 'undefined' ? window.innerWidth * (f.side === 'mine' ? 0.25 : 0.75) : 0)
+              const top = f.y ?? (typeof window !== 'undefined' ? window.innerHeight - 90 : 0)
+              return (
+                <div key={f.id} style={{ position: 'fixed', left, top, transform: 'translate(-50%, -50%)' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, animation: 'powerFloat 1.1s ease-out forwards' }}>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: color, border: '2px solid var(--n0)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, lineHeight: 1, boxShadow: '0 2px 8px rgba(0,0,0,0.18)' }}>
+                      {f.emoji}
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)', color }}>+1</span>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
 
@@ -1221,8 +1335,27 @@ function GameContent() {
 
         <style>{`
           html, body { overflow: hidden; max-width: 100vw; overscroll-behavior: none; }
+          /* Mobile: full-width column on the default surface */
+          .game-shell { background: var(--n50); }
+          #game-root { width: 100%; max-width: 640px; }
+          /* Desktop: darker backdrop + white column surface for definition (no hard frame) */
+          @media (min-width: 700px) {
+            .game-shell { background: var(--n150); }
+            #game-root { background: var(--n50) !important; }
+            .game-bottom { padding-bottom: 32px !important; }
+            .game-inputrow { gap: 8px !important; }
+            .game-inputrow input { font-size: 16px !important; padding: 13px 16px !important; }
+            .game-inputrow button { font-size: 18px !important; padding: 13px 20px !important; }
+            .pwr-top { font-size: 16px !important; gap: 2px !important; padding: 1px 3px !important; }
+          }
           #game-root * { -webkit-user-select: none; user-select: none; }
           #game-root input { -webkit-user-select: text; user-select: text; }
+          /* Chain area scrollbar styling */
+          [data-scroll="chain"] { scrollbar-width: thin; scrollbar-color: var(--n300) transparent; }
+          [data-scroll="chain"]::-webkit-scrollbar { width: 6px; }
+          [data-scroll="chain"]::-webkit-scrollbar-track { background: transparent; }
+          [data-scroll="chain"]::-webkit-scrollbar-thumb { background: var(--n300); border-radius: 3px; }
+          [data-scroll="chain"]::-webkit-scrollbar-thumb:hover { background: var(--n400); }
           @keyframes blink { 50% { opacity: 0; } }
           @keyframes reactionFloat { 0% { opacity: 0; transform: translateY(20px); } 20% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-40px); } }
           @keyframes scoreFloat { 0% { opacity: 0; transform: translateY(0); } 15% { opacity: 1; transform: translateY(-8px); } 100% { opacity: 0; transform: translateY(-60px); } }
@@ -1230,7 +1363,7 @@ function GameContent() {
           @keyframes earnGlow { 0% { box-shadow: 0 0 0 2px #4caf50; } 60% { box-shadow: 0 0 8px 4px #4caf5088; } 100% { box-shadow: 0 0 0 2px #4caf50; } }
           @keyframes activateFlash { 0% { background: var(--accent-warm-faint); } 50% { background: #ffe09a; } 100% { background: var(--n0); } }
           @keyframes urgentPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(234,179,8,0.8); } 50% { box-shadow: 0 0 0 6px rgba(234,179,8,0); } }
-          @keyframes powerFloat { 0% { opacity: 0; transform: translateY(0); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-36px); } }
+          @keyframes powerFloat { 0% { opacity: 0; transform: translateY(-3px) scale(0.5); } 25% { opacity: 1; transform: translateY(3px) scale(1); } 65% { opacity: 1; } 100% { opacity: 0; transform: translateY(22px) scale(1); } }
           @keyframes dzPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.65; } }
           @keyframes turnPulseP1 { 0%,100% { box-shadow: 0 0 0 2px var(--n0), 0 0 0 4px var(--p1); } 50% { box-shadow: 0 0 0 2px var(--n0), 0 0 0 4px var(--p1), 0 0 0 8px var(--p1-light); } }
           @keyframes turnPulseP2 { 0%,100% { box-shadow: 0 0 0 2px var(--n0), 0 0 0 4px var(--p2); } 50% { box-shadow: 0 0 0 2px var(--n0), 0 0 0 4px var(--p2), 0 0 0 8px var(--p2-light); } }
@@ -1240,13 +1373,42 @@ function GameContent() {
       </div>
 
       {/* ── Bottom panel ── */}
-      <div style={{ background: 'var(--n0)', borderTop: '1px solid var(--n200)', padding: '10px 14px 20px', flexShrink: 0 }}>
+      <div className="game-bottom" style={{ background: 'var(--n50)', borderTop: '1px solid var(--n200)', padding: '10px 14px 20px', flexShrink: 0 }}>
 
-        {/* Opponent effect bar — shown when an active effect targets me */}
+        {/* My power-ups — centered, spaced, attached to the input area (duel mode) */}
+        {gameMode === 'duel' && (
+          <div style={{ display: 'flex', gap: 22, alignItems: 'center', justifyContent: 'center', padding: '2px 0 10px', marginBottom: 10, borderBottom: '1px solid var(--n100)' }}>
+            {(Object.keys(POWER_UP_LABELS) as PowerUpId[]).map(id => {
+              const count = myInventory[id] ?? 0
+              const earned = count > 0
+              // secondLife and extend can be used anytime (affect your own timer); all others require your turn
+              const turnLocked = !isMyTurn && id !== 'secondLife' && id !== 'extend'
+              const hl = myHighlights[id]
+              return (
+                <PowerUpTooltip key={id} id={id} description={POWER_DESC[id].own} onActivate={earned && !turnLocked ? () => activatePowerUp(id) : () => {}} disabled={!earned || turnLocked}>
+                  <span
+                    style={{ position: 'relative', display: 'inline-flex', padding: '2px 3px', cursor: earned && !turnLocked ? 'pointer' : 'default', opacity: earned ? (turnLocked ? 0.5 : 1) : 0.2, filter: earned ? 'none' : 'grayscale(1)', flexShrink: 0, borderRadius: 6, animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : (id === 'secondLife' && isMyTurn && timeLeft <= 8 && count > 0) ? 'urgentPulse 0.8s ease-in-out infinite' : 'none' }}>
+                    <span style={{ fontSize: 24, lineHeight: 1 }}>{POWER_UP_LABELS[id].emoji}</span>
+                    {earned && (
+                      <span style={{ position: 'absolute', top: -2, right: -5, fontSize: 8, fontFamily: 'var(--font-mono)', background: 'var(--p1)', color: 'var(--n0)', borderRadius: '99px', padding: '1px 3px', fontWeight: 700, lineHeight: 1 }}>×{count}</span>
+                    )}
+                  </span>
+                </PowerUpTooltip>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Opponent effect bar — full-width strip styled like the Danger Zone bar */}
         {isMyTurn && round.activeEffects.some(e => (e.kind === 'letterBomb' && e.onPlayerId === myId) || (e.kind === 'anchor' && e.onPlayerId === myId)) && (
-          <div style={{ background: 'var(--accent-warm-faint)', border: '1px solid var(--accent-warm-light)', borderRadius: 'var(--radius-md)', padding: '5px 10px', marginBottom: 8, fontSize: 11, fontWeight: 600, color: 'var(--accent-warm-muted)', textAlign: 'center' }}>
-            {round.activeEffects.find(e => e.kind === 'letterBomb' && e.onPlayerId === myId) && '💣 Next word must contain a rare letter'}
-            {round.activeEffects.find(e => e.kind === 'anchor' && e.onPlayerId === myId) && '⚓ Next word must be 6+ letters'}
+          <div style={{ margin: '0 -14px 10px', background: 'var(--accent-warm-subtle)', borderTop: '1px solid var(--accent-warm-light)', borderBottom: '1px solid var(--accent-warm-light)', padding: '7px 14px', fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', color: 'var(--accent-warm-muted)', textAlign: 'center', animation: 'dzPulse 2s ease-in-out infinite' }}>
+            {round.activeEffects.find(e => e.kind === 'letterBomb' && e.onPlayerId === myId) && (
+              <span style={{ display: 'inline-flex', flexWrap: 'wrap', justifyContent: 'center', gap: '0 6px' }}>
+                <span>💣 NEXT WORD MUST CONTAIN ANY RARE LETTER —</span>
+                <span style={{ whiteSpace: 'nowrap' }}>Q X Z J V K W F H Y B</span>
+              </span>
+            )}
+            {round.activeEffects.find(e => e.kind === 'anchor' && e.onPlayerId === myId) && '⚓ NEXT WORD MUST BE 6+ LETTERS'}
           </div>
         )}
 
@@ -1263,7 +1425,7 @@ function GameContent() {
         </div>
 
         {/* Input row */}
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <div className="game-inputrow" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <input
             ref={inputRef}
             type="text"
@@ -1307,6 +1469,18 @@ function GameContent() {
         const opponentConfirmed = ctx?.nextRoundConfirmations.includes(opponentId) ?? false
         const myRoundWins = matchState.roundWins[myId] ?? 0
         const oppRoundWins = matchState.roundWins[opponentId] ?? 0
+        // Hidden: show a floating button to bring the results back while the user reviews the board
+        if (resultsHidden) {
+          return (
+            <button
+              onClick={() => setResultsHidden(false)}
+              style={{ position: 'fixed', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)', left: '50%', transform: 'translateX(-50%)', zIndex: 200, display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--n900)', color: 'var(--n0)', border: 'none', borderRadius: 'var(--radius-full)', padding: '10px 18px', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-heading)', cursor: 'pointer', boxShadow: '0 6px 20px rgba(0,0,0,0.25)' }}
+            >
+              {iWonRound ? '🎉' : '😤'} Round results
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: nextRoundTimeLeft <= 5 ? 'var(--danger)' : 'var(--n400)' }}>{Math.ceil(nextRoundTimeLeft)}s</span>
+            </button>
+          )
+        }
         return (
           <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}>
             <div style={{ width: '100%', maxWidth: 360, background: 'var(--n0)', border: '1px solid var(--n200)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', textAlign: 'center', boxShadow: '0 16px 48px rgba(0,0,0,0.18)' }}>
@@ -1325,6 +1499,12 @@ function GameContent() {
               <div style={{ marginTop: '8px' }}>
                 <Button variant="secondary" size="lg" full onClick={() => { window.location.href = '/' }}>Back to Lobby</Button>
               </div>
+              <button
+                onClick={() => setResultsHidden(true)}
+                style={{ marginTop: '12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: 'var(--n500)', fontFamily: 'var(--font-heading)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                👁 View final board
+              </button>
               <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--n500)' }}>
                 {opponentConfirmed ? 'Opponent is ready' : 'Waiting on opponent…'}
                 <span style={{ marginLeft: '8px', fontFamily: 'var(--font-mono)', color: nextRoundTimeLeft <= 5 ? 'var(--danger)' : 'var(--n400)' }}>
@@ -1335,6 +1515,7 @@ function GameContent() {
           </div>
         )
       })()}
+    </div>
     </div>
   )
 }
