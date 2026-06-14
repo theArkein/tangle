@@ -24,6 +24,9 @@ import {
   getDoubleScore,
   getAnchor,
   consumeAnchor,
+  armSecondLife,
+  hasSecondLifeArmed,
+  consumeSecondLifeArmed,
 } from "../modules/PowerUpEngine";
 import type { PowerUpDrop } from "../modules/PowerUpEngine";
 import type { PowerUpId } from "../modules/powerups/types";
@@ -371,6 +374,32 @@ export class GameRoom implements DurableObject {
       return;
     }
 
+    await this.applyValidatedWord(stored, playerId, opponentId, word, ws);
+  }
+
+  /**
+   * Shared post-validation word logic for BOTH human and bot turns. The caller
+   * is responsible for validating the word first (the invalid-word handling
+   * differs per caller). Everything after a valid word — scoring, Danger Zone,
+   * effect consumption, drop evaluation/capping, persistence, and broadcasts —
+   * is identical, so it lives here to keep the two paths from drifting apart.
+   *
+   * All effect inputs are derived from the submitting player's own effects, so
+   * a bot (which never activates power-ups) naturally gets no self-buffs while
+   * still honoring effects the human placed on it.
+   *
+   * @param ws  the submitting human's socket (to send `word_result`), or null for the bot.
+   */
+  private async applyValidatedWord(
+    stored: RoomStorage,
+    playerId: string,
+    opponentId: string,
+    word: string,
+    ws: WebSocket | null
+  ): Promise<void> {
+    const matchState = stored.matchState!;
+    const round = matchState.currentRound!;
+
     const chainLengthAfter = round.chain.length + 1;
     const wasDangerZone = this.dangerZoneEnabled && round.chain.length >= DANGER_ZONE_CHAIN_THRESHOLD;
     const isDangerZone = this.dangerZoneEnabled && chainLengthAfter >= DANGER_ZONE_CHAIN_THRESHOLD;
@@ -385,7 +414,7 @@ export class GameRoom implements DurableObject {
       : 1;
 
     const scoreResult = score(word, { multiplier });
-    ws.send(
+    ws?.send(
       JSON.stringify({
         type: "word_result",
         valid: true,
@@ -405,7 +434,9 @@ export class GameRoom implements DurableObject {
     const prevRoundScore = round.playerRoundScores[playerId] ?? 0;
     const newRoundScore = prevRoundScore + scoreResult.points;
 
-    // Consume single-turn effects.
+    // Consume single-turn effects (all derived from the submitter's own effects).
+    const anchorEffect = getAnchor(round.activeEffects, playerId);
+    const skipLetterCheck = isWildPending(round.activeEffects, playerId);
     let effectsAfter = round.activeEffects;
     effectsAfter = consumeLetterBomb(effectsAfter, playerId).activeEffects;
     if (anchorEffect) effectsAfter = consumeAnchor(effectsAfter, playerId);
@@ -425,7 +456,7 @@ export class GameRoom implements DurableObject {
       justEnteredDangerZone,
     });
 
-    const wordResult = transition(stored.matchState, {
+    const wordResult = transition(matchState, {
       type: "wordSubmitted",
       playerId,
       word,
@@ -440,11 +471,14 @@ export class GameRoom implements DurableObject {
       stored.matchState.currentRound.dropTriggers = evalResult.triggers;
       stored.matchState.currentRound.activeEffects = effectsAfter;
 
+      const dropCounts = stored.matchState.currentRound.dropTriggers.playerDropCounts;
       for (const drop of evalResult.drops) {
         const playerInv = stored.matchState.currentRound.powerUpInventory[drop.playerId];
         if (playerInv) {
-          const totalHeld = Object.values(playerInv).reduce((s, n) => s + n, 0);
-          if (totalHeld < 3) {
+          // Cap each power-up type at 3 total drops per round (independent of use).
+          const counts = (dropCounts[drop.playerId] ??= {});
+          if ((counts[drop.id] ?? 0) < 3) {
+            counts[drop.id] = (counts[drop.id] ?? 0) + 1;
             stored.matchState.currentRound.powerUpInventory[drop.playerId] = addToInventory(
               playerInv,
               drop.id
@@ -542,26 +576,27 @@ export class GameRoom implements DurableObject {
       return;
     }
 
-    // Second Life — instant timer reset; handled separately (no ActiveEffect needed).
+    // Second Life — arm a shield; the timer is NOT reset now. When this
+    // player's turn timer expires, the shield is consumed to reset the timer
+    // once (handled in alarm()), instead of timing out.
     if (powerUpId === "secondLife") {
       if ((inventory.secondLife ?? 0) <= 0) {
         ws.send(JSON.stringify({ type: "error", message: "not_in_inventory" }));
+        return;
+      }
+      if (hasSecondLifeArmed(round.activeEffects, playerId)) {
+        ws.send(JSON.stringify({ type: "error", message: "already_armed" }));
         return;
       }
       round.powerUpInventory[playerId] = {
         ...inventory,
         secondLife: inventory.secondLife - 1,
       };
-      const inDZ =
-        this.dangerZoneEnabled &&
-        (round.chain.length) >= DANGER_ZONE_CHAIN_THRESHOLD;
-      const resetMs = inDZ ? DANGER_ZONE_TIMER_MS : modeConfig.turnTimeoutMs;
-      stored.turnStartAt = Date.now();
+      round.activeEffects = armSecondLife(round.activeEffects, playerId);
       await this.saveRoom(stored);
-      await this.state.storage.setAlarm(Date.now() + resetMs);
       this.broadcastAll(
         JSON.stringify({
-          type: "second_life_consumed",
+          type: "second_life_armed",
           playerId,
           byPlayerId: playerId,
         })
@@ -593,13 +628,6 @@ export class GameRoom implements DurableObject {
         await this.state.storage.setAlarm(currentAlarm + result.alarmDeltaMs);
         stored.turnStartAt = (stored.turnStartAt ?? Date.now()) + result.alarmDeltaMs;
       }
-    }
-
-    // Tax — deduct 4 from opponent's round score and match score (floor at 0).
-    if (result.taxOpponent) {
-      const opponentRoundScore = round.playerRoundScores[opponentId] ?? 0;
-      round.playerRoundScores[opponentId] = Math.max(0, opponentRoundScore - 4);
-      stored.scores[opponentId] = Math.max(0, (stored.scores[opponentId] ?? 0) - 4);
     }
 
     this.broadcastAll(
@@ -733,6 +761,33 @@ export class GameRoom implements DurableObject {
     const round = stored.matchState.currentRound;
     const timedOutPlayerId = round.currentPlayerId;
     const prevRoundNumber = round.roundNumber;
+
+    // Second Life shield — if the timed-out player has one armed, consume it
+    // and reset the timer instead of forfeiting the turn.
+    if (hasSecondLifeArmed(round.activeEffects, timedOutPlayerId)) {
+      round.activeEffects = consumeSecondLifeArmed(
+        round.activeEffects,
+        timedOutPlayerId
+      );
+      const modeConfig = getModeConfig(stored.matchState.gameMode);
+      const inDZ =
+        this.dangerZoneEnabled &&
+        round.chain.length >= DANGER_ZONE_CHAIN_THRESHOLD;
+      const resetMs = inDZ ? DANGER_ZONE_TIMER_MS : modeConfig.turnTimeoutMs;
+      stored.turnStartAt = Date.now();
+      await this.saveRoom(stored);
+      await this.setAlarm(stored, "turn", Date.now() + resetMs);
+      this.broadcastAll(
+        JSON.stringify({
+          type: "second_life_consumed",
+          playerId: timedOutPlayerId,
+          byPlayerId: timedOutPlayerId,
+        })
+      );
+      this.broadcastStateAll(stored);
+      return;
+    }
+
     const result = transition(stored.matchState, {
       type: "turnTimeout",
       playerId: timedOutPlayerId,
@@ -762,7 +817,13 @@ export class GameRoom implements DurableObject {
     const round = stored.matchState.currentRound;
     if (!round || round.currentPlayerId !== stored.botPlayerId) return;
 
-    const word = await this.dictionary.pickWord(round.seedLetter, new Set(round.chain));
+    // Honor effects the human placed on the bot (Letter Bomb / Anchor).
+    const botRequiredRare = hasLetterBombEffect(round.activeEffects, round.currentPlayerId);
+    const botAnchor = getAnchor(round.activeEffects, round.currentPlayerId);
+    const word = await this.dictionary.pickWord(round.seedLetter, new Set(round.chain), {
+      requiredAnyRareLetter: botRequiredRare,
+      minLength: botAnchor?.minLength,
+    });
     if (!word) {
       const prevRound = round.roundNumber;
       const result = transition(stored.matchState, {
@@ -785,12 +846,14 @@ export class GameRoom implements DurableObject {
     const state = stored.matchState!;
     const round = state.currentRound!;
 
+    const botRequiredRare = hasLetterBombEffect(round.activeEffects, botId);
+    const botAnchor = getAnchor(round.activeEffects, botId);
     const validation = await validate(
       word,
       round.seedLetter,
       new Set(round.chain),
       this.dictionary,
-      {}
+      { requiredAnyRareLetter: botRequiredRare, minLength: botAnchor?.minLength }
     );
 
     if (!validation.valid) {
@@ -804,71 +867,8 @@ export class GameRoom implements DurableObject {
       return;
     }
 
-    const scoreResult = score(word, { multiplier: 1 });
-    stored.currentRoundWords.push({
-      word,
-      playerId: botId,
-      points: scoreResult.points,
-      breakdown: scoreResult.breakdown,
-    });
-
     const opponentId = botId === state.player1Id ? state.player2Id : state.player1Id;
-    const prevRoundScore = round.playerRoundScores[botId] ?? 0;
-    const newRoundScore = prevRoundScore + scoreResult.points;
-    const evalResult = evaluateDrops({
-      playerId: botId,
-      opponentId,
-      word,
-      scoreResult,
-      prevRoundScore,
-      newRoundScore,
-      triggers: round.dropTriggers,
-      isDangerZone: false,
-      justEnteredDangerZone: false,
-    });
-
-    const wordResult = transition(state, {
-      type: "wordSubmitted",
-      playerId: botId,
-      word,
-      points: scoreResult.points,
-    });
-    stored.matchState = wordResult.state;
-
-    const botAppliedDrops: PowerUpDrop[] = [];
-    if (stored.matchState.currentRound) {
-      stored.matchState.currentRound.seedLetter = word[word.length - 1] ?? round.seedLetter;
-      stored.matchState.currentRound.dropTriggers = evalResult.triggers;
-
-      for (const drop of evalResult.drops) {
-        const playerInv = stored.matchState.currentRound.powerUpInventory[drop.playerId];
-        if (playerInv) {
-          const totalHeld = Object.values(playerInv).reduce((s, n) => s + n, 0);
-          if (totalHeld < 3) {
-            stored.matchState.currentRound.powerUpInventory[drop.playerId] = addToInventory(
-              playerInv,
-              drop.id
-            );
-            botAppliedDrops.push(drop);
-          }
-        }
-      }
-    }
-
-    stored.scores[botId] = (stored.scores[botId] ?? 0) + scoreResult.points;
-
-    for (const drop of botAppliedDrops) {
-      this.broadcastAll(
-        JSON.stringify({
-          type: "power_up_earned",
-          playerId: drop.playerId,
-          powerup: drop.id,
-        })
-      );
-    }
-
-    await this.saveRoom(stored);
-    await this.applyEffects(wordResult.effects, stored);
+    await this.applyValidatedWord(stored, botId, opponentId, word, null);
     await this.maybeAutoConfirmNextRound();
   }
 

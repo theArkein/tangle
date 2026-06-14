@@ -6,4 +6,5 @@ export const WILD: PowerUpDefinition = {
   category: "disruption",
   rarity: "common",
   description: "Your next word can start with any letter, ignoring the chain rule.",
+  // Note: Earned by playing words where first and last letters match (e.g., eagle, yearly)
 };

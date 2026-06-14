@@ -4,7 +4,6 @@ export type PowerUpId =
   | "double"
   | "wild"
   | "anchor"
-  | "tax"
   | "extend";
 
 export type Category = "defensive" | "offensive" | "disruption";
@@ -18,13 +17,16 @@ export type ActiveEffect =
   | { kind: "letterBomb"; onPlayerId: PlayerId; anyRareLetter: true }
   | { kind: "doubleScore"; forPlayerId: PlayerId; wordsRemaining: number }
   | { kind: "wildPending"; forPlayerId: PlayerId }
-  | { kind: "anchor"; onPlayerId: PlayerId; minLength: number };
+  | { kind: "anchor"; onPlayerId: PlayerId; minLength: number }
+  | { kind: "secondLifeArmed"; forPlayerId: PlayerId };
 
 export interface DropTriggers {
   // floor(cumulativeScore / 25) last recorded per player — used to detect new 25pt milestones
   playerFreezeThresholds: Record<PlayerId, number>;
   // words played by each player this round — used to detect Wild (every 6th word)
   playerWordCounts: Record<PlayerId, number>;
+  // cumulative drops per power-up type per player this round — used to cap each type at 3
+  playerDropCounts: Record<PlayerId, Partial<Record<PowerUpId, number>>>;
 }
 
 export interface PowerUpDrop {
@@ -47,7 +49,6 @@ export function emptyInventory(): PowerUpInventory {
     double: 0,
     wild: 0,
     anchor: 0,
-    tax: 0,
     extend: 0,
   };
 }
@@ -56,5 +57,6 @@ export function emptyTriggers(player1Id: PlayerId, player2Id: PlayerId): DropTri
   return {
     playerFreezeThresholds: { [player1Id]: 0, [player2Id]: 0 },
     playerWordCounts: { [player1Id]: 0, [player2Id]: 0 },
+    playerDropCounts: { [player1Id]: {}, [player2Id]: {} },
   };
 }

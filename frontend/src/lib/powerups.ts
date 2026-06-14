@@ -11,7 +11,6 @@ export type PowerUpId =
   | 'double'
   | 'wild'
   | 'anchor'
-  | 'tax'
 
 export type PowerUpCategory = 'defensive' | 'offensive' | 'disruption'
 
@@ -22,7 +21,6 @@ export const POWER_UP_LABELS: Record<PowerUpId, { name: string; emoji: string }>
   double: { name: 'Double', emoji: '🎯' },
   wild: { name: 'Wild', emoji: '🃏' },
   anchor: { name: 'Anchor', emoji: '⚓' },
-  tax: { name: 'Tax', emoji: '💸' },
 }
 
 export interface PowerUpGuideEntry {
@@ -51,12 +49,12 @@ export const POWER_UP_GUIDE: PowerUpGuideEntry[] = [
   {
     id: 'secondLife',
     name: 'Second Life',
-    description: 'Manually activate to reset your turn timer to 25s (10s in Danger Zone).',
-    opponentDescription: 'They have a Second Life they can activate to reset their timer.',
+    description: 'Arm a shield — if your turn timer runs out, it resets once (25s, or 10s in Danger Zone) instead of timing out.',
+    opponentDescription: 'They have a Second Life shield that can save them from one timeout.',
     category: 'defensive',
     howItWorks:
-      'Tap to activate on your turn. Resets your timer to a full 25 seconds (or 10s in Danger Zone). Use it before time runs out to keep playing.',
-    example: "You have 4 seconds left. Tap Second Life — your timer resets to 25 seconds.",
+      'Tap to arm the shield — your timer is NOT reset right away. If your turn timer later runs out, the shield is consumed to reset it once (25s, or 10s in Danger Zone) instead of you timing out.',
+    example: "You arm Second Life, then run out of time searching for a word. Instead of forfeiting your turn, your timer resets and you keep playing.",
   },
   {
     id: 'letterBomb',
@@ -98,16 +96,6 @@ export const POWER_UP_GUIDE: PowerUpGuideEntry[] = [
       "Activate on your turn. Opponent's next word submission must be at least 6 letters long. Short words will be rejected until they find a qualifying word.",
     example: "Chain ends in 'an'. Anchor applied — opponent must find a word starting with 'n' with 6+ letters.",
   },
-  {
-    id: 'tax',
-    name: 'Tax',
-    description: 'Reduce opponent\'s current round score by 4 points (minimum 0).',
-    opponentDescription: "They can cut 4 points from your current round score.",
-    category: 'offensive',
-    howItWorks:
-      "Instant effect. Deducts 4 points from the opponent's current round score, floored at 0. Changes the score gap immediately.",
-    example: "Opponent has 47 round points. Tax — they drop to 43. You're now 4 points closer to the 59-point win gap.",
-  },
 ]
 
 export const CATEGORY_META: Record<PowerUpCategory, { label: string; tagline: string }> = {
@@ -122,9 +110,8 @@ export const EARN_TRIGGERS = [
   { powerup: 'double' as PowerUpId, emoji: '🎯', trigger: '10+ letter word', notes: 'Any time' },
   { powerup: 'letterBomb' as PowerUpId, emoji: '💣', trigger: 'Word contains Q, X, Z, or J', notes: 'Any time' },
   { powerup: 'anchor' as PowerUpId, emoji: '⚓', trigger: '8+ letter word', notes: 'Any time' },
-  { powerup: 'tax' as PowerUpId, emoji: '💸', trigger: 'Any word in Danger Zone', notes: 'Any time in DZ' },
-  { powerup: 'wild' as PowerUpId, emoji: '🃏', trigger: 'Every 6 words you play', notes: '6, 12, 18...' },
-  { powerup: 'secondLife' as PowerUpId, emoji: '💚', trigger: 'Word scores 15+ pts, uses 4+ distinct vowels, or contains 2+ rare letter tiers', notes: '3 paths + DZ entry' },
+  { powerup: 'wild' as PowerUpId, emoji: '🃏', trigger: 'Word starts and ends with same letter', notes: 'e.g., eagle, radar' },
+  { powerup: 'secondLife' as PowerUpId, emoji: '💚', trigger: 'Word scores >15 pts or entering Danger Zone', notes: '2 paths' },
 ] as const
 
 export const GAME_MODES = {

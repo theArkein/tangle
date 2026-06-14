@@ -109,40 +109,22 @@ describe("PowerUpEngine.evaluateDrops — anchor (8+ letters)", () => {
   });
 });
 
-describe("PowerUpEngine.evaluateDrops — wild (every 6 words)", () => {
-  it("emits a wild drop on the 6th word", () => {
-    const t = { ...withTriggers(), playerWordCounts: { [P1]: 5, [P2]: 0 } };
+describe("PowerUpEngine.evaluateDrops — wild (same start/end letter)", () => {
+  it("emits a wild drop for palindromic words", () => {
     const { drops } = evaluateDrops({
       playerId: P1,
       opponentId: P2,
-      word: "abc",
-      scoreResult: mkScoreResult("abc"),
+      word: "eagle",
+      scoreResult: mkScoreResult("eagle"),
       prevRoundScore: 0,
-      newRoundScore: 3,
-      triggers: t,
+      newRoundScore: 5,
+      triggers: withTriggers(),
     });
 
     expect(drops.some((d) => d.id === "wild")).toBe(true);
   });
 
-  it("does not emit wild on the 5th word", () => {
-    const t = { ...withTriggers(), playerWordCounts: { [P1]: 4, [P2]: 0 } };
-    const { drops } = evaluateDrops({
-      playerId: P1,
-      opponentId: P2,
-      word: "abc",
-      scoreResult: mkScoreResult("abc"),
-      prevRoundScore: 0,
-      newRoundScore: 3,
-      triggers: t,
-    });
-
-    expect(drops.some((d) => d.id === "wild")).toBe(false);
-  });
-});
-
-describe("PowerUpEngine.evaluateDrops — tax (Danger Zone)", () => {
-  it("emits a tax drop for any word played in the Danger Zone", () => {
+  it("does not emit wild for non-palindromic words", () => {
     const { drops } = evaluateDrops({
       playerId: P1,
       opponentId: P2,
@@ -151,10 +133,9 @@ describe("PowerUpEngine.evaluateDrops — tax (Danger Zone)", () => {
       prevRoundScore: 0,
       newRoundScore: 5,
       triggers: withTriggers(),
-      isDangerZone: true,
     });
 
-    expect(drops.some((d) => d.id === "tax")).toBe(true);
+    expect(drops.some((d) => d.id === "wild")).toBe(false);
   });
 });
 
@@ -280,20 +261,111 @@ describe("PowerUpEngine — Anchor", () => {
   });
 });
 
-describe("PowerUpEngine — Tax", () => {
-  it("decrements inventory and sets taxOpponent signal", () => {
-    const inventory = addToInventory(emptyInventory(), "tax");
-    const result = activate({
-      inventory,
+describe("PowerUpEngine — one opponent-targeting effect at a time", () => {
+  it("rejects Anchor when a Letter Bomb is already on the opponent", () => {
+    const first = activate({
+      inventory: addToInventory(addToInventory(emptyInventory(), "letterBomb"), "anchor"),
       activeEffects: [],
-      powerUpId: "tax",
+      powerUpId: "letterBomb",
       byPlayerId: P1,
       opponentId: P2,
     });
-    expect(result.error).toBeUndefined();
-    expect(result.inventory.tax).toBe(0);
-    expect(result.taxOpponent).toBe(true);
-    expect(result.activeEffects).toHaveLength(0);
+    expect(first.error).toBeUndefined();
+
+    const second = activate({
+      inventory: first.inventory,
+      activeEffects: first.activeEffects,
+      powerUpId: "anchor",
+      byPlayerId: P1,
+      opponentId: P2,
+    });
+    expect(second.error).toBe("opponent_effect_active");
+    // Inventory and effects must be left untouched on rejection.
+    expect(second.inventory.anchor).toBe(1);
+    expect(second.activeEffects).toEqual(first.activeEffects);
+  });
+
+  it("rejects a second Letter Bomb while one is already active", () => {
+    const first = activate({
+      inventory: { ...emptyInventory(), letterBomb: 2 },
+      activeEffects: [],
+      powerUpId: "letterBomb",
+      byPlayerId: P1,
+      opponentId: P2,
+    });
+    const second = activate({
+      inventory: first.inventory,
+      activeEffects: first.activeEffects,
+      powerUpId: "letterBomb",
+      byPlayerId: P1,
+      opponentId: P2,
+    });
+    expect(second.error).toBe("opponent_effect_active");
+  });
+
+  it("allows a self-targeting power-up while an opponent effect is active", () => {
+    const first = activate({
+      inventory: { ...emptyInventory(), letterBomb: 1, double: 1 },
+      activeEffects: [],
+      powerUpId: "letterBomb",
+      byPlayerId: P1,
+      opponentId: P2,
+    });
+    const second = activate({
+      inventory: first.inventory,
+      activeEffects: first.activeEffects,
+      powerUpId: "double",
+      byPlayerId: P1,
+      opponentId: P2,
+    });
+    expect(second.error).toBeUndefined();
+  });
+});
+
+describe("PowerUpEngine — Double cannot stack", () => {
+  it("rejects a second Double while one is already active", () => {
+    const first = activate({
+      inventory: { ...emptyInventory(), double: 2 },
+      activeEffects: [],
+      powerUpId: "double",
+      byPlayerId: P1,
+      opponentId: P2,
+    });
+    expect(first.error).toBeUndefined();
+
+    const second = activate({
+      inventory: first.inventory,
+      activeEffects: first.activeEffects,
+      powerUpId: "double",
+      byPlayerId: P1,
+      opponentId: P2,
+    });
+    expect(second.error).toBe("double_active");
+    expect(second.inventory.double).toBe(1);
+    expect(second.activeEffects).toEqual(first.activeEffects);
+  });
+
+  it("allows a new Double once the previous one has expired", () => {
+    const first = activate({
+      inventory: { ...emptyInventory(), double: 2 },
+      activeEffects: [],
+      powerUpId: "double",
+      byPlayerId: P1,
+      opponentId: P2,
+    });
+    // Consume both words of the first Double so the effect drops off.
+    let effects = decrementDouble(first.activeEffects, P1);
+    effects = decrementDouble(effects, P1);
+    expect(getDoubleScore(effects, P1)).toBeUndefined();
+
+    const again = activate({
+      inventory: first.inventory,
+      activeEffects: effects,
+      powerUpId: "double",
+      byPlayerId: P1,
+      opponentId: P2,
+    });
+    expect(again.error).toBeUndefined();
   });
 });
 

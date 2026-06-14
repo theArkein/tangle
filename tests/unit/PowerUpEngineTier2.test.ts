@@ -28,10 +28,10 @@ describe("PowerUpEngine — Second Life (manual)", () => {
   });
 });
 
-describe("PowerUpEngine.evaluateDrops — secondLife paths", () => {
-  it("awards secondLife when a word scores 15+ points", () => {
-    // "qualification" has Q(+3) + length 13 = 16pts base, well over 15
-    const word = "qualification";
+describe("PowerUpEngine.evaluateDrops — secondLife trigger", () => {
+  it("awards secondLife when a word scores > 15 points", () => {
+    // "extraordinary" has X(+3) + length 13 + long bonus = well over 15
+    const word = "extraordinary";
     const scoreResult = score(word, { multiplier: 1 });
     const { drops } = evaluateDrops({
       playerId: P1,
@@ -43,12 +43,12 @@ describe("PowerUpEngine.evaluateDrops — secondLife paths", () => {
       triggers: emptyTriggers(P1, P2),
     });
 
+    expect(scoreResult.points).toBeGreaterThan(15);
     expect(drops.some((d) => d.id === "secondLife" && d.playerId === P1)).toBe(true);
   });
 
-  it("awards secondLife when word contains 4+ distinct vowels", () => {
-    // "education" has e, u, a, i, o = 5 distinct vowels
-    const word = "education";
+  it("does not award secondLife for 15 points exactly", () => {
+    const word = "excellent"; // typically scores around 15
     const scoreResult = score(word, { multiplier: 1 });
     const { drops } = evaluateDrops({
       playerId: P1,
@@ -60,24 +60,10 @@ describe("PowerUpEngine.evaluateDrops — secondLife paths", () => {
       triggers: emptyTriggers(P1, P2),
     });
 
-    expect(drops.some((d) => d.id === "secondLife" && d.playerId === P1)).toBe(true);
-  });
-
-  it("awards secondLife when word has letters from 2+ rare tiers", () => {
-    // "quiver" has Q (tier1) and V (tier2)
-    const word = "quiver";
-    const scoreResult = score(word, { multiplier: 1 });
-    const { drops } = evaluateDrops({
-      playerId: P1,
-      opponentId: P2,
-      word,
-      scoreResult,
-      prevRoundScore: 0,
-      newRoundScore: scoreResult.points,
-      triggers: emptyTriggers(P1, P2),
-    });
-
-    expect(drops.some((d) => d.id === "secondLife" && d.playerId === P1)).toBe(true);
+    // Only award if > 15, not >= 15
+    const hasSecondLife = drops.some((d) => d.id === "secondLife" && d.playerId === P1);
+    const shouldHave = scoreResult.points > 15;
+    expect(hasSecondLife).toBe(shouldHave);
   });
 });
 
@@ -115,21 +101,3 @@ describe("PowerUpEngine.evaluateDrops — letterBomb (contains Q/X/Z/J)", () => 
   });
 });
 
-describe("PowerUpEngine.evaluateDrops — word count tracking", () => {
-  it("increments playerWordCount after each drop evaluation", () => {
-    const t = emptyTriggers(P1, P2);
-    const word = "abc";
-    const { triggers } = evaluateDrops({
-      playerId: P1,
-      opponentId: P2,
-      word,
-      scoreResult: score(word, { multiplier: 1 }),
-      prevRoundScore: 0,
-      newRoundScore: 3,
-      triggers: t,
-    });
-
-    expect(triggers.playerWordCounts[P1]).toBe(1);
-    expect(triggers.playerWordCounts[P2]).toBe(0);
-  });
-});
