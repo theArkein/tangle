@@ -5,5 +5,5 @@ export const SECOND_LIFE: PowerUpDefinition = {
   name: "Second Life",
   category: "defensive",
   rarity: "common",
-  description: "Manually activate to reset your turn timer to 25s (10s in Danger Zone).",
+  description: "Arm a shield — if your turn timer runs out, it resets once (25s, or 10s in Danger Zone) instead of timing out.",
 };

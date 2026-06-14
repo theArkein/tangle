@@ -4,7 +4,6 @@ import { LETTER_BOMB } from "./letterBomb";
 import { DOUBLE } from "./double";
 import { WILD } from "./wild";
 import { ANCHOR } from "./anchor";
-import { TAX } from "./tax";
 import type { PowerUpDefinition, PowerUpId } from "./types";
 
 export const REGISTRY: readonly PowerUpDefinition[] = [
@@ -14,7 +13,6 @@ export const REGISTRY: readonly PowerUpDefinition[] = [
   DOUBLE,
   WILD,
   ANCHOR,
-  TAX,
 ] as const;
 
 const BY_ID: Map<PowerUpId, PowerUpDefinition> = new Map(
@@ -32,4 +30,3 @@ export { LETTER_BOMB } from "./letterBomb";
 export { DOUBLE } from "./double";
 export { WILD } from "./wild";
 export { ANCHOR } from "./anchor";
-export { TAX } from "./tax";

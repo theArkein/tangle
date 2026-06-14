@@ -27,6 +27,7 @@ type ActiveEffect =
   | { kind: 'doubleScore'; forPlayerId: string; wordsRemaining: number }
   | { kind: 'wildPending'; forPlayerId: string }
   | { kind: 'anchor'; onPlayerId: string; minLength: number }
+  | { kind: 'secondLifeArmed'; forPlayerId: string }
 
 interface DropTriggers {
   playerFreezeThresholds: Record<string, number>
@@ -87,6 +88,7 @@ type ServerMsg =
   | { type: 'danger_zone_entered' }
   | { type: 'power_up_activated'; powerup: PowerUpId; byPlayerId: string; targetPlayerId: string | null; effect?: ActiveEffect | null }
   | { type: 'second_life_consumed'; playerId: string }
+  | { type: 'second_life_armed'; playerId: string }
   | { type: 'reaction'; fromPlayerId: string; reaction: string }
   | { type: 'forfeit'; absentPlayerId: string }
   | { type: 'error'; message: string }
@@ -214,6 +216,9 @@ const MODE_CONFIG: Record<GameMode, { displayName: string; turnSeconds: number }
   classic: { displayName: 'Classic', turnSeconds: 8 },
 }
 
+// Score gap needed to win a round in Duel mode (mirrors ROUND_WIN_GAP in the worker).
+const ROUND_WIN_GAP = 59
+
 const REACTION_OPTIONS: Array<{ key: string; emoji: string }> = [
   { key: 'fire', emoji: '🔥' },
   { key: 'shocked', emoji: '😱' },
@@ -337,6 +342,9 @@ function GameContent() {
   const [floats, setFloats] = useState<Array<{ id: number; text: string; ok: boolean; byMe: boolean }>>([])
   const floatIdRef = useRef(0)
   const [timeLeft, setTimeLeft] = useState(0)
+  // Effective bar window for the current turn — grows when the timer is extended
+  // (e.g. Extend power-up) so the progress bar animates from full instead of pinning.
+  const [timerWindow, setTimerWindow] = useState(0)
   const [nextRoundTimeLeft, setNextRoundTimeLeft] = useState(NEXT_ROUND_SECONDS)
   const [roundHistory, setRoundHistory] = useState<RoundHistoryEntry[]>([])
   const [gameScores, setGameScores] = useState<Record<string, number>>({})
@@ -385,8 +393,8 @@ function GameContent() {
         currentPlayerId: P1,
         playerRoundScores: { [P1]: 312, [P2]: 187 },
         powerUpInventory: {
-          [P1]: { extend: 2, secondLife: 1, letterBomb: 1, double: 1, wild: 1, anchor: 1, tax: 0 },
-          [P2]: { extend: 1, secondLife: 1, letterBomb: 0, double: 2, wild: 0, anchor: 1, tax: 1 },
+          [P1]: { extend: 2, secondLife: 1, letterBomb: 1, double: 1, wild: 1, anchor: 1 },
+          [P2]: { extend: 1, secondLife: 1, letterBomb: 0, double: 2, wild: 0, anchor: 1 },
         },
         activeEffects: [
           { kind: 'letterBomb', onPlayerId: P1, anyRareLetter: true },
@@ -532,11 +540,30 @@ function GameContent() {
         const setter = isMe ? setMyHighlights : setOppHighlights
         setter(h => ({ ...h, [msg.powerup]: 'activated' }))
         setTimeout(() => setter(h => { const n = { ...h }; delete n[msg.powerup]; return n }), 1000)
-        // Only toast when I'm the target (opponent used something on me).
+        // Confirm to the player who activated an opponent-targeting power-up
+        // that it landed (mirrors the feedback the target receives).
+        const targetsOpponent = msg.targetPlayerId != null && msg.targetPlayerId !== msg.byPlayerId
+        if (isMe && targetsOpponent) {
+          const pLabel0 = POWER_UP_LABELS[msg.powerup]
+          setActiveToast({ id: ++toastIdRef.current, variant: 'success', title: `${pLabel0?.emoji ?? ''} ${pLabel0?.name ?? msg.powerup} → opponent` })
+        }
+        // Toast the target when an opponent uses something on me.
         // letterBomb/anchor are surfaced by the persistent effect bar, so skip the toast for those.
         if (!isMe && msg.targetPlayerId === myId && msg.powerup !== 'letterBomb' && msg.powerup !== 'anchor') {
           const pLabel2 = POWER_UP_LABELS[msg.powerup]
           setActiveToast({ id: ++toastIdRef.current, variant: 'error', title: `${pLabel2?.emoji ?? ''} ${pLabel2?.name ?? msg.powerup}` })
+        }
+        playRef.current(isMe ? 'power_used_me' : 'power_used_opp')
+        return
+      }
+
+      if (msg.type === 'second_life_armed') {
+        const isMe = msg.playerId === myId
+        const setter = isMe ? setMyHighlights : setOppHighlights
+        setter(h => ({ ...h, secondLife: 'activated' }))
+        setTimeout(() => setter(h => { const n = { ...h }; delete n.secondLife; return n }), 1000)
+        if (isMe) {
+          setActiveToast({ id: ++toastIdRef.current, variant: 'success', title: '💚 Second Life armed' })
         }
         playRef.current(isMe ? 'power_used_me' : 'power_used_opp')
         return
@@ -547,6 +574,9 @@ function GameContent() {
         const setter = isMe ? setMyHighlights : setOppHighlights
         setter(h => ({ ...h, secondLife: 'activated' }))
         setTimeout(() => setter(h => { const n = { ...h }; delete n.secondLife; return n }), 1000)
+        if (isMe) {
+          setActiveToast({ id: ++toastIdRef.current, variant: 'success', title: '💚 Second Life saved you!' })
+        }
         playRef.current(isMe ? 'power_used_me' : 'power_used_opp')
         return
       }
@@ -636,8 +666,17 @@ function GameContent() {
     if (matchState?.status !== 'round_active') return
     const maxSecs = timerMaxSecs
     const calc = () => Math.max(0, maxSecs - (Date.now() - turnStartAtRef.current) / 1000)
-    setTimeLeft(calc())
-    const id = setInterval(() => setTimeLeft(calc()), 250)
+    // Reset the bar window at the start of each turn; it grows below if extended.
+    setTimerWindow(maxSecs)
+    const tick = () => {
+      const t = calc()
+      setTimeLeft(t)
+      // If the timer was extended past the base window, expand the bar to match
+      // so it animates smoothly from full rather than freezing at 100%.
+      setTimerWindow(prev => (t > prev ? t : prev))
+    }
+    tick()
+    const id = setInterval(tick, 250)
     return () => clearInterval(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchState?.status, matchState?.gameMode, timerMaxSecs, matchState?.currentRound?.currentPlayerId])
@@ -997,13 +1036,13 @@ function GameContent() {
   const myName = (myId && playerNames[myId]) || 'You'
   const gameMode: GameMode = matchState.gameMode ?? 'duel'
   const modeCfg = MODE_CONFIG[gameMode]
-  const emptyInv: PowerUpInventory = { extend: 0, secondLife: 0, letterBomb: 0, double: 0, wild: 0, anchor: 0, tax: 0 }
+  const emptyInv: PowerUpInventory = { extend: 0, secondLife: 0, letterBomb: 0, double: 0, wild: 0, anchor: 0 }
   const myInventory: PowerUpInventory = round.powerUpInventory[myId] ?? emptyInv
   const opponentInventory: PowerUpInventory = round.powerUpInventory[opponentId] ?? emptyInv
   const inDangerZone = dangerZoneEnabled && round.chain.length >= 12
   inDangerZoneRef.current = inDangerZone
   const displayChain = devMode ? TEST_CHAIN_100 : round.chain
-  const timerPct = (timeLeft / timerMaxSecs) * 100
+  const timerPct = Math.min(100, (timeLeft / Math.max(timerWindow, timerMaxSecs)) * 100)
   const timerUrgent = timeLeft <= 5 || inDangerZone
   const lastWord = round.chain[round.chain.length - 1]
   const nextSeed = lastWord ? lastWord.slice(-1).toUpperCase() : round.seedLetter.toUpperCase()
@@ -1022,6 +1061,7 @@ function GameContent() {
     if (e.kind === 'anchor'      && e.onPlayerId === opponentId) return [`⚓ ≥${e.minLength}`]
     if (e.kind === 'doubleScore' && e.forPlayerId === opponentId) return [`🎯 ${e.wordsRemaining}W`]
     if (e.kind === 'wildPending' && e.forPlayerId === opponentId) return ['🃏 Wild']
+    if (e.kind === 'secondLifeArmed' && e.forPlayerId === opponentId) return ['💚 Shield']
     return []
   })
 
@@ -1030,8 +1070,21 @@ function GameContent() {
     if (e.kind === 'anchor'      && e.onPlayerId === myId)    return [`⚓ ≥${e.minLength}`]
     if (e.kind === 'doubleScore' && e.forPlayerId === myId)   return [`🎯 ${e.wordsRemaining}W`]
     if (e.kind === 'wildPending' && e.forPlayerId === myId)   return ['🃏 Wild']
+    if (e.kind === 'secondLifeArmed' && e.forPlayerId === myId) return ['💚 Shield']
     return []
   })
+
+  // Wild lets me ignore the "starts with X" rule on my next word.
+  const wildActiveForMe = round.activeEffects.some(e => e.kind === 'wildPending' && e.forPlayerId === myId)
+  // Constraints I placed on the opponent — surfaced prominently on their turn.
+  const oppHasLetterBomb = round.activeEffects.some(e => e.kind === 'letterBomb' && e.onPlayerId === opponentId)
+  const oppAnchorEffect = round.activeEffects.find(
+    (e): e is Extract<ActiveEffect, { kind: 'anchor' }> => e.kind === 'anchor' && e.onPlayerId === opponentId
+  )
+  // Only one opponent-targeting power-up (Letter Bomb / Anchor) may be active at a time.
+  const oppTargetingActive = oppHasLetterBomb || !!oppAnchorEffect
+  // Double cannot be stacked while one is already active on me.
+  const myDoubleActive = round.activeEffects.some(e => e.kind === 'doubleScore' && e.forPlayerId === myId)
 
   return (
     <div className="game-shell" style={S.shell}>
@@ -1123,16 +1176,20 @@ function GameContent() {
               {Math.ceil(timeLeft)}s
             </div>
           )}
-          {/* Score gap — Duel mode */}
+          {/* Score gap vs. round-win target — Duel mode */}
           {showScoreGap && (
             <div style={{
-              fontSize: 14,
+              display: 'inline-flex',
+              alignItems: 'baseline',
+              gap: 3,
               fontFamily: 'var(--font-mono)',
               fontWeight: 700,
               marginTop: 2,
-              color: scoreGap > 0 ? 'var(--success)' : scoreGap < 0 ? 'var(--danger)' : 'var(--n400)',
             }}>
-              {scoreGap > 0 ? `▲${scoreGap}` : scoreGap < 0 ? `▼${Math.abs(scoreGap)}` : '–'}
+              <span style={{ fontSize: 14, color: scoreGap > 0 ? 'var(--success)' : scoreGap < 0 ? 'var(--danger)' : 'var(--n400)' }}>
+                {scoreGap > 0 ? `▲${scoreGap}` : scoreGap < 0 ? `▼${Math.abs(scoreGap)}` : '–'}
+              </span>
+              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--n400)' }}>/ {ROUND_WIN_GAP}</span>
             </div>
           )}
         </div>
@@ -1254,7 +1311,9 @@ function GameContent() {
             {/* Action prompt */}
             <div style={{ fontSize: 13, color: 'var(--n500)', fontFamily: 'var(--font-body)', textAlign: 'center', maxWidth: 220 }}>
               {isMyTurn
-                ? <>Open the chain with a word starting with <strong style={{ color: 'var(--n800)' }}>{round.seedLetter.toUpperCase()}</strong></>
+                ? wildActiveForMe
+                  ? <>🃏 Wild active — open the chain with <strong style={{ color: 'var(--n800)' }}>any word</strong></>
+                  : <>Open the chain with a word starting with <strong style={{ color: 'var(--n800)' }}>{round.seedLetter.toUpperCase()}</strong></>
                 : <>Waiting for {opponentName} to open the chain…</>}
             </div>
           </div>
@@ -1393,11 +1452,16 @@ function GameContent() {
               const earned = count > 0
               // secondLife and extend can be used anytime (affect your own timer); all others require your turn
               const turnLocked = !isMyTurn && id !== 'secondLife' && id !== 'extend'
+              // Only one opponent-targeting power-up may be active at a time.
+              const targetLocked = (id === 'letterBomb' || id === 'anchor') && oppTargetingActive
+              // Double cannot be stacked while one is already active.
+              const stackLocked = id === 'double' && myDoubleActive
+              const locked = turnLocked || targetLocked || stackLocked
               const hl = myHighlights[id]
               return (
-                <PowerUpTooltip key={id} id={id} description={POWER_DESC[id].own} onActivate={earned && !turnLocked ? () => activatePowerUp(id) : () => {}} disabled={!earned || turnLocked}>
+                <PowerUpTooltip key={id} id={id} description={POWER_DESC[id].own} onActivate={earned && !locked ? () => activatePowerUp(id) : () => {}} disabled={!earned || locked}>
                   <span
-                    style={{ position: 'relative', display: 'inline-flex', padding: '2px 3px', cursor: earned && !turnLocked ? 'pointer' : 'default', opacity: earned ? (turnLocked ? 0.5 : 1) : 0.2, filter: earned ? 'none' : 'grayscale(1)', flexShrink: 0, borderRadius: 6, animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : (id === 'secondLife' && isMyTurn && timeLeft <= 8 && count > 0) ? 'urgentPulse 0.8s ease-in-out infinite' : 'none' }}>
+                    style={{ position: 'relative', display: 'inline-flex', padding: '2px 3px', cursor: earned && !locked ? 'pointer' : 'default', opacity: earned ? (locked ? 0.5 : 1) : 0.2, filter: earned ? 'none' : 'grayscale(1)', flexShrink: 0, borderRadius: 6, animation: hl === 'earned' ? 'earnGlow 0.8s ease-out' : hl === 'activated' ? 'activateFlash 0.6s ease-out' : (id === 'secondLife' && isMyTurn && timeLeft <= 8 && count > 0) ? 'urgentPulse 0.8s ease-in-out infinite' : 'none' }}>
                     <span style={{ fontSize: 24, lineHeight: 1 }}>{POWER_UP_LABELS[id].emoji}</span>
                     {earned && (
                       <span style={{ position: 'absolute', top: -2, right: -5, fontSize: 8, fontFamily: 'var(--font-mono)', background: 'var(--p1)', color: 'var(--n0)', borderRadius: '99px', padding: '1px 3px', fontWeight: 700, lineHeight: 1 }}>×{count}</span>
@@ -1422,11 +1486,21 @@ function GameContent() {
           </div>
         )}
 
+        {/* Constraints I placed on the opponent — shown on their turn so I can see my power-up working */}
+        {!isMyTurn && (oppHasLetterBomb || oppAnchorEffect) && (
+          <div style={{ margin: '0 -14px 10px', background: 'var(--accent-warm-subtle)', borderTop: '1px solid var(--accent-warm-light)', borderBottom: '1px solid var(--accent-warm-light)', padding: '7px 14px', fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', color: 'var(--accent-warm-muted)', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {oppHasLetterBomb && <span>💣 OPPONENT MUST USE A RARE LETTER</span>}
+            {oppAnchorEffect && <span>⚓ OPPONENT MUST USE {oppAnchorEffect.minLength}+ LETTERS</span>}
+          </div>
+        )}
+
         {/* Turn label + word count */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
           {isMyTurn ? (
-            <span style={{ fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-heading)', color: inDangerZone ? 'var(--danger-zone)' : 'var(--p1)' }}>
-              Word starting with <strong>{nextSeed}</strong>
+            <span style={{ fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-heading)', color: wildActiveForMe ? 'var(--accent-warm-muted)' : inDangerZone ? 'var(--danger-zone)' : 'var(--p1)' }}>
+              {wildActiveForMe
+                ? <>🃏 Wild active — play <strong>any word</strong></>
+                : <>Word starting with <strong>{nextSeed}</strong></>}
             </span>
           ) : (
             <span style={{ fontSize: 12, color: 'var(--n400)', fontFamily: 'var(--font-body)' }}>Waiting for opponent…</span>
@@ -1447,7 +1521,7 @@ function GameContent() {
             }}
             onBlur={() => { if (isMobile && isMyTurn && !submitting) setTimeout(() => inputRef.current?.focus(), 0) }}
             disabled={!isMyTurn || submitting}
-            placeholder={isMyTurn ? (round.chain.length === 0 ? `Start with ${round.seedLetter.toUpperCase()}…` : `${nextSeed}…`) : 'Waiting…'}
+            placeholder={isMyTurn ? (wildActiveForMe ? 'Any word…' : round.chain.length === 0 ? `Start with ${round.seedLetter.toUpperCase()}…` : `${nextSeed}…`) : 'Waiting…'}
             autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false}
             inputMode={isMobile ? 'none' : 'text'} enterKeyHint="send"
             style={{ ...S.input, fontSize: 13, padding: '7px 10px', opacity: !isMyTurn || submitting ? 0.45 : 1, cursor: !isMyTurn || submitting ? 'not-allowed' : 'text' }}

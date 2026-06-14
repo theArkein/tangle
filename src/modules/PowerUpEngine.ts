@@ -88,12 +88,8 @@ export function evaluateDrops(input: EvaluateDropsInput): EvaluateDropsResult {
   const nextTriggers: DropTriggers = {
     playerFreezeThresholds: { ...triggers.playerFreezeThresholds },
     playerWordCounts: { ...triggers.playerWordCounts },
+    playerDropCounts: { ...triggers.playerDropCounts },
   };
-
-  // Increment word count before checking Wild trigger
-  const prevWordCount = nextTriggers.playerWordCounts[playerId] ?? 0;
-  const newWordCount = prevWordCount + 1;
-  nextTriggers.playerWordCounts[playerId] = newWordCount;
 
   // 1. Extend — every 25-point multiple crossed
   const prevThreshold = Math.floor(prevRoundScore / 25);
@@ -122,27 +118,21 @@ export function evaluateDrops(input: EvaluateDropsInput): EvaluateDropsResult {
     drops.push({ playerId, id: "anchor" });
   }
 
-  // 5. Tax — any word played in Danger Zone
-  if (isDangerZone) {
-    drops.push({ playerId, id: "tax" });
-  }
-
-  // 6. Wild — every 6th word by this player
-  if (newWordCount % 6 === 0) {
+  // 5. Wild — word has same start and end letter
+  const lowerWord = word.toLowerCase();
+  if (lowerWord.length >= 2 && lowerWord[0] === lowerWord[lowerWord.length - 1]) {
     drops.push({ playerId, id: "wild" });
   }
 
-  // 7. Second Life — any of 4 paths
+  // 6. Second Life — score > 15 or entering Danger Zone
   let earnSecondLife = false;
-  if (scoreResult.points >= 15) earnSecondLife = true;
-  if (!earnSecondLife && countUniqueVowels(word) >= 4) earnSecondLife = true;
-  if (!earnSecondLife && hasLettersFromMultipleRareTiers(word)) earnSecondLife = true;
+  if (scoreResult.points > 15) earnSecondLife = true;
 
   if (earnSecondLife) {
     drops.push({ playerId, id: "secondLife" });
   }
 
-  // 8. Danger Zone entry — Second Life to BOTH players
+  // 7. Danger Zone entry — Second Life to BOTH players
   if (justEnteredDangerZone) {
     drops.push({ playerId, id: "secondLife" });
     drops.push({ playerId: opponentId, id: "secondLife" });
@@ -169,7 +159,27 @@ export function addToInventory(
 export type ActivateError =
   | "not_in_inventory"
   | "unknown_powerup"
-  | "powerups_disabled";
+  | "powerups_disabled"
+  | "opponent_effect_active"
+  | "double_active";
+
+// Power-ups that constrain the opponent's next word. Only one may be active on
+// the opponent at a time.
+const OPPONENT_TARGETING: ReadonlySet<PowerUpId> = new Set<PowerUpId>([
+  "letterBomb",
+  "anchor",
+]);
+
+export function hasOpponentTargetingEffect(
+  activeEffects: ActiveEffect[],
+  opponentId: PlayerId
+): boolean {
+  return activeEffects.some(
+    (e) =>
+      (e.kind === "letterBomb" && e.onPlayerId === opponentId) ||
+      (e.kind === "anchor" && e.onPlayerId === opponentId)
+  );
+}
 
 export interface ActivateInput {
   inventory: PowerUpInventory;
@@ -187,7 +197,6 @@ export interface ActivateResult {
   effect?: ActiveEffect;
   // Signals for instant effects — callers act on these
   alarmDeltaMs?: number;  // extend: add 5s to alarm
-  taxOpponent?: boolean;  // tax: caller deducts 10 from opponent score
 }
 
 function withoutEffectsMatching(
@@ -207,6 +216,17 @@ export function activate(input: ActivateInput): ActivateResult {
   if ((inventory[powerUpId] ?? 0) <= 0) {
     return { inventory, activeEffects, error: "not_in_inventory" };
   }
+  // Only one opponent-targeting power-up may be active on the opponent at a time.
+  if (
+    OPPONENT_TARGETING.has(powerUpId) &&
+    hasOpponentTargetingEffect(activeEffects, opponentId)
+  ) {
+    return { inventory, activeEffects, error: "opponent_effect_active" };
+  }
+  // Double cannot be stacked — only one may be active on yourself at a time.
+  if (powerUpId === "double" && getDoubleScore(activeEffects, byPlayerId)) {
+    return { inventory, activeEffects, error: "double_active" };
+  }
 
   const nextInventory: PowerUpInventory = {
     ...inventory,
@@ -216,7 +236,6 @@ export function activate(input: ActivateInput): ActivateResult {
   let effect: ActiveEffect | undefined;
   let nextEffects = activeEffects;
   let alarmDeltaMs: number | undefined;
-  let taxOpponent: boolean | undefined;
 
   switch (powerUpId) {
     case "extend": {
@@ -277,17 +296,11 @@ export function activate(input: ActivateInput): ActivateResult {
       ];
       break;
     }
-    case "tax": {
-      // Instant: no persistent effect, caller deducts from opponent score
-      taxOpponent = true;
-      break;
-    }
   }
 
   const result: ActivateResult = { inventory: nextInventory, activeEffects: nextEffects };
   if (effect !== undefined) result.effect = effect;
   if (alarmDeltaMs !== undefined) result.alarmDeltaMs = alarmDeltaMs;
-  if (taxOpponent !== undefined) result.taxOpponent = taxOpponent;
   return result;
 }
 
@@ -321,6 +334,37 @@ export function hasLetterBombEffect(
 export function isWildPending(activeEffects: ActiveEffect[], playerId: PlayerId): boolean {
   return activeEffects.some(
     (e) => e.kind === "wildPending" && e.forPlayerId === playerId
+  );
+}
+
+export function hasSecondLifeArmed(
+  activeEffects: ActiveEffect[],
+  playerId: PlayerId
+): boolean {
+  return activeEffects.some(
+    (e) => e.kind === "secondLifeArmed" && e.forPlayerId === playerId
+  );
+}
+
+export function armSecondLife(
+  activeEffects: ActiveEffect[],
+  playerId: PlayerId
+): ActiveEffect[] {
+  // Replace any existing armed shield for this player (no stacking).
+  return [
+    ...activeEffects.filter(
+      (e) => !(e.kind === "secondLifeArmed" && e.forPlayerId === playerId)
+    ),
+    { kind: "secondLifeArmed", forPlayerId: playerId },
+  ];
+}
+
+export function consumeSecondLifeArmed(
+  activeEffects: ActiveEffect[],
+  playerId: PlayerId
+): ActiveEffect[] {
+  return activeEffects.filter(
+    (e) => !(e.kind === "secondLifeArmed" && e.forPlayerId === playerId)
   );
 }
 

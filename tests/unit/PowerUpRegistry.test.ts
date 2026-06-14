@@ -5,7 +5,7 @@ import {
 } from "../../src/modules/powerups";
 
 describe("Power-up registry", () => {
-  it("contains exactly the 7 new power-ups", () => {
+  it("contains exactly 6 power-ups", () => {
     const ids = REGISTRY.map((d) => d.id).sort();
     expect(ids).toEqual([
       "anchor",
@@ -13,7 +13,6 @@ describe("Power-up registry", () => {
       "extend",
       "letterBomb",
       "secondLife",
-      "tax",
       "wild",
     ]);
   });
